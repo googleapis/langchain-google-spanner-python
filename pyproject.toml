@@ -1,0 +1,41 @@
+[project]
+name = "langchain-google-spanner"
+version = "0.0.1"
+description = "LangChain integrations for Google Cloud Spanner"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.8"
+dependencies = [
+    "langchain==0.1.1",
+    "google-cloud-spanner==3.41.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/googleapis/langchain-google-spanner-python"
+Repository = "https://github.com/googleapis/langchain-google-spanner-python.git"
+"Bug Tracker" = "https://github.com/googleapis/langchain-google-spanner-python/issues"
+Changelog = "https://github.com/googleapis/langchain-google-spanner-python/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+test = [
+    "black==23.12.0",
+    "isort==5.13.2",
+    "mypy==1.7.1",
+    "pytest-asyncio==0.23.0",
+    "pytest==7.4.4",
+    "types-google-cloud-ndb==2.2.0.20240106"
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+exclude = [
+    "owlbot.py"
+]
