@@ -56,8 +56,11 @@ class SpannerDocumentSaver:
         db = self.client.instance(self.instance_name).database(self.database_name)
         if self.dialect == DatabaseDialect.POSTGRESQL:
             values = [(doc.page_content, json.dumps(doc.metadata)) for doc in documents]
-        else:
-            values = [(doc.page_content, JsonObject(doc.metadata)) for doc in documents]
+        # else:
+        #     values = [
+        #         [doc.page_content, JsonObject(doc.metadata)]
+        #         for doc in documents
+        #     ]
         with db.batch() as batch:
             batch.insert(
                 table=self.table_name,
