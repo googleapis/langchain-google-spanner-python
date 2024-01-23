@@ -16,10 +16,7 @@ import pytest
 from google.cloud.spanner import Client, KeySet  # type: ignore
 from langchain_core.documents import Document
 
-from langchain_google_spanner.document_loader import (
-    SpannerDocumentSaver,
-    SpannerLoader,
-)
+from langchain_google_spanner.document_loader import SpannerDocumentSaver, SpannerLoader
 
 INSTANCE = "my-instance"
 GOOGLE_DATABASE = "my-google-database"
