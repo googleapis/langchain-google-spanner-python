@@ -19,9 +19,9 @@ import uuid
 from typing import List, Optional
 
 from google.cloud import spanner
+from google.cloud.spanner_admin_database_v1.types import DatabaseDialect  # type: ignore
 from google.cloud.spanner_v1 import param_types
 from google.cloud.spanner_v1.data_types import JsonObject
-from google.cloud.spanner_admin_database_v1.types import DatabaseDialect  # type: ignore
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, message_to_dict, messages_from_dict
 
