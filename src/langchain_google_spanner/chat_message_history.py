@@ -70,14 +70,14 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
                             created_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
                             session_id STRING(MAX) NOT NULL,
                             message JSON NOT NULL,
-                         ) PRIMARY KEY (id, created_at ASC)"""
+                         ) PRIMARY KEY (session_id, created_at ASC, id)"""
 
         pg_schema = f"""CREATE TABLE IF NOT EXISTS {self.table_name}  (
                              id varchar(36) DEFAULT (spanner.generate_uuid()),
                              created_at SPANNER.COMMIT_TIMESTAMP NOT NULL,
                              session_id TEXT NOT NULL,
                              message JSONB NOT NULL,
-                             PRIMARY KEY (id, created_at ASC)
+                             PRIMARY KEY (session_id, created_at ASC, id)
                          );"""
 
         ddl = pg_schema if self.dialect == DatabaseDialect.POSTGRESQL else google_schema
