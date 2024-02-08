@@ -13,135 +13,281 @@
 # limitations under the License.
 
 import pytest
+import os
+import json
 from google.cloud.spanner import Client, KeySet  # type: ignore
 from langchain_core.documents import Document
 
 from langchain_google_spanner.document_loader import SpannerDocumentSaver, SpannerLoader
 
-INSTANCE = "my-instance"
-GOOGLE_DATABASE = "my-google-database"
-PG_DATABASE = "my-database"
-TABLE = "my_table"
+project_id = os.environ["PROJECT_ID"]
+instance=os.environ["INSTANCE_ID"]
+google_database=os.environ["GOOGLE_DATABASE"]
+pg_database=os.environ["PG_DATABASE"]
+table_name=os.environ["TABLE_NAME"]
+
+OPERATION_TIMEOUT_SECONDS = 240
+
 expected_docs = [
     Document(page_content="Hello, World!", metadata={"source": "my-computer"}),
     Document(page_content="Taylor", metadata={"last_name": "Swift"}),
 ]
+
 json_format_metadata = [
     Document(page_content="{'source': 'my-computer'}"),
     Document(page_content="{'last_name': 'Swift'}"),
 ]
+
 yaml_format = [
     Document(page_content="source: my-computer"),
     Document(page_content="last_name: Swift"),
 ]
+
 csv_format = [
     Document(page_content="Hello, World!,my-computer"),
     Document(page_content="Taylor, Swift"),
 ]
 
 
+@pytest.fixture(name="google_client")
+def setup_google_client() -> Client:
+    client = Client(project=project_id)
+    database = client.instance(instance).database(google_database)
+    operation = database.update_ddl([f"DROP table_name IF EXISTS {table_name}"])
+    operation.result(OPERATION_TIMEOUT_SECONDS)
+    yield client
+
+
+@pytest.fixture(name="pg_client")
+def setup_pg_client() -> Client:
+    client = Client(project=project_id)
+    database = client.instance(instance).database(pg_database)
+    operation = database.update_ddl([f"DROP table_name IF EXISTS {table_name}"])
+    operation.result(OPERATION_TIMEOUT_SECONDS)
+    yield client
+
+
 class TestSpannerDocumentSaver:
-    def test_saver_google_sql(self):
-        database = Client().instance(INSTANCE).database(GOOGLE_DATABASE)
-        operation = database.update_ddl([f"DROP TABLE IF EXISTS {TABLE}"])
-        # operation.result(OPERATION_TIMEOUT_SECONDS)
-        # with database.batch() as batch:
-        #     batch.delete(TABLE, KeySet(all_=True))
-
-        saver = SpannerDocumentSaver(INSTANCE, GOOGLE_DATABASE, TABLE)
-        # saver.add_documents(expected_docs)
-        # saver.add_documents([])
-        saver.delete(expected_docs)
-        # assert
-
-    def test_saver_pg(self):
-        database = Client().instance(INSTANCE).database(PG_DATABASE)
-        operation = database.update_ddl([f"DROP TABLE IF EXISTS {TABLE}"])
-        # with database.batch() as batch:
-        #     batch.delete(TABLE, KeySet(all_=True))
-
-        saver = SpannerDocumentSaver(INSTANCE, PG_DATABASE, TABLE)
+    def test_saver_google_sql(self, google_client):
+        saver = SpannerDocumentSaver(instance, google_database, table_name, google_client)
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(client=google_client, instance=instance, database=google_database, query=query)
         saver.add_documents(expected_docs)
-        saver.add_documents([])
-        saver.delete(expected_docs)
-        # assert
+        assert loader.load() == expected_docs
 
-    def test_saver_with_bad_docs(self):
-        saver = SpannerDocumentSaver(INSTANCE, GOOGLE_DATABASE, TABLE)
+    # def test_saver_google_sql_with_custom_schema():
+
+    def test_saver_pg(self, pg_client):
+        saver = SpannerDocumentSaver(instance, pg_database, table_name, pg_client)
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(client=pg_client, instance=instance, database=pg_database, query=query)
+        saver.add_documents(expected_docs)
+        assert loader.load() == expected_docs
+
+    # def test_saver_pg_with_custom_schema():
+
+    def test_delete(self, google_client):
+        saver = SpannerDocumentSaver(instance, google_database, table_name, google_client)
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(client=google_client, instance=instance, database=google_database, query=query)
+        saver.add_documents(expected_docs)
+        assert loader.load() == expected_docs
+        # delete one Document
+        saver.delete([expected_docs[0]])
+        assert loader.load() == [expected_docs[1]]
+
+    def test_saver_with_bad_docs(self, google_client):
+        saver = SpannerDocumentSaver(instance, google_database, table_name, google_client)
         with pytest.raises(Exception):
             saver.add_documents([1, 2, 3])
 
-
 class TestSpannerDocumentLoader:
+    @pytest.fixture(autouse=True)
+    def setup_database(self, google_client):
+        google_schema = f"""CREATE table_name {table_name} (
+                        product_id STRING(1024) NOT NULL,
+                        product_name STRING(1024),
+                        description STRING(1024),
+                        price NUMERIC,
+                        ) PRIMARY KEY (product_id)"""
+        database = google_client.instance(instance).database(google_database)
+        operation = database.update_ddl([google_schema])
+        operation.result(OPERATION_TIMEOUT_SECONDS)
+        with database.batch() as batch:
+            batch.insert(
+                table=table_name,
+                columns=("product_id", "product_name", "description", "price"),
+                values=[
+                    ("1", "cards", "playing cards are cool", 10),
+                ],
+            )
+
     # Default CUJs
-    def test_loader_with_table(self):
-        loader = SpannerLoader(INSTANCE, GOOGLE_DATABASE, table_name=TABLE)
-        result = loader.load()
-
-        assert result == expected_docs
-
-    def test_loader_with_query(self):
-        query = f"SELECT PageContent, LangchainMetadata FROM {TABLE};"
-        loader = SpannerLoader(INSTANCE, GOOGLE_DATABASE, query=query)
-        result = loader.load()
-
-        assert result == expected_docs
+    @pytest.mark.parametrize(
+        "query, expected",
+        [
+            pytest.param(
+                f"SELECT * FROM {table_name}",
+                [
+                    Document(
+                        page_content="1",
+                        metadata={
+                            "product_name": "cards",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                        },
+                    )
+                ],
+            ),
+            pytest.param(
+                f"SELECT product_name, description FROM {table_name}",
+                [
+                    Document(
+                        page_content="cards",
+                        metadata={
+                            "description": "playing cards are cool",
+                        },
+                    )
+                ],
+            ),
+        ],
+    )
+    def test_loader_with_query(self, google_client, query, expected):
+        loader = SpannerLoader(instance, google_database, query, google_client)
+        docs = loader.load()
+        assert docs == expected
 
     def test_loader_missing_table_and_query(self):
         with pytest.raises(Exception):
-            SpannerLoader(INSTANCE, GOOGLE_DATABASE)
+            SpannerLoader(instance, google_database)
 
     # Custom CUJs
-    def test_loader_custom_content(self):
-        loader = SpannerLoader(INSTANCE, GOOGLE_DATABASE, table_name=TABLE)
-        result = loader.load()
-        formatted_expected_docs = []
-        assert result == formatted_expected_docs
-
-    def test_loader_custom_metadata(self):
-        loader = SpannerLoader(INSTANCE, GOOGLE_DATABASE, table_name=TABLE)
-        result = loader.load()
-        formatted_expected_docs = []
-        assert result == formatted_expected_docs
-
-    def test_loader_custom_format_json(self):
+    def test_loader_custom_content(self, google_client):
+        query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            INSTANCE, GOOGLE_DATABASE, table_name=TABLE, format="JSON"
+            instance,
+            google_database,
+            query,
+            google_client,
+            content_columns=["description", "price"],
         )
-        result = loader.load()
-        formatted_expected_docs = []
-        assert result == formatted_expected_docs
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="playing cards are cool 10",
+                metadata={"product_id": "1", "product_name": "card"},
+            ),
+        ]
 
-    def test_loader_custom_format_yaml(self):
+    def test_loader_custom_metadata(self, google_client):
+        query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            INSTANCE, GOOGLE_DATABASE, table_name=TABLE, format="YAML"
+            instance,
+            google_database,
+            query,
+            google_client,
+            metadata_columns=["product_id", "price"],
         )
-        result = loader.load()
-        formatted_expected_docs = []
-        assert result == formatted_expected_docs
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="1",
+                metadata={"product_id": "1", "price": 10},
+            ),
+        ]
 
-    def test_loader_custom_format_csv(self):
+    def test_loader_custom_content_and_metadata(self, google_client):
+        query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            INSTANCE, GOOGLE_DATABASE, table_name=TABLE, format="CSV"
+            instance,
+            google_database,
+            query,
+            google_client,
+            content_columns=["product_name"]
+            metadata_columns=["product_id", "price"],
         )
-        result = loader.load()
-        formatted_expected_docs = []
-        assert result == formatted_expected_docs
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="card",
+                metadata={"product_id": "1", "price": 10},
+            ),
+        ]
 
-    def test_loader_custom_format_error(self):
+    def test_loader_custom_json_metadata(self, google_client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance,
+            google_database,
+            query,
+            google_client,
+            metadata_json_column="description",
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="1",
+                metadata={"product_id": "1", "price": 10},
+            ),
+        ]
+
+    def test_loader_custom_format_json(self, google_client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance, google_database, query, google_client, content_columns=["product_id", "product_name"], format="JSON"
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="product_id: 1\nproduct_name: cards",
+                metadata={
+                    "description": "playing cards are cool",
+                    "price": 10,
+                },
+            )
+        ]
+
+    def test_loader_custom_format_yaml(self, google_client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance, google_database, query, google_client, format="YAML"
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="product_id: 1",
+                metadata={
+                    "product_name": "cards",
+                    "description": "playing cards are cool",
+                    "price": 10,
+                },
+            )
+        ]
+
+    def test_loader_custom_format_csv(self, google_client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance, google_database, query, google_client, format="CSV"
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="1",
+                metadata={
+                    "product_name": "cards",
+                    "description": "playing cards are cool",
+                    "price": 10,
+                },
+            )
+        ]
+
+    def test_loader_custom_format_error(self, google_client):
+        query = f"SELECT * FROM {table_name}"
         with pytest.raises(Exception):
             SpannerLoader(
-                INSTANCE,
-                GOOGLE_DATABASE,
-                table_name=TABLE,
+                instance,
+                google_database,
+                query,
+                google_client,
                 format="NOT_A_FORMAT",
             )
-
-    def test_custom_client(self):
-        client = Client()
-        loader = SpannerLoader(
-            INSTANCE, GOOGLE_DATABASE, table_name=TABLE, client=client
-        )
-        result = loader.load()
-
-        assert result == expected_docs

@@ -12,8 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_google_spanner.chat_message_history import SpannerChatMessageHistory
-
+from .chat_message_history import SpannerChatMessageHistory
+from .document_loader import SpannerDocumentSaver, SpannerLoader
 from .version import __version__
 
-__all__ = ["__version__", "SpannerChatMessageHistory"]
+__all__ = [
+    "SpannerChatMessageHistory",
+    "SpannerDocumentSaver",
+    "SpannerLoader",
+    "__version__",
+]

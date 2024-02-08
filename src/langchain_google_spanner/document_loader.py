@@ -13,23 +13,75 @@
 # limitations under the License.
 
 import datetime
-from typing import List, Optional
+import json
+from typing import Dict, Iterator, List, Optional
 
 from google.cloud.spanner import Client, KeySet
-from google.cloud.spanner_admin_database_v1.types import DatabaseDialect # type: ignore
+from google.cloud.spanner_admin_database_v1.types import DatabaseDialect  # type: ignore
 from google.cloud.spanner_v1.data_types import JsonObject  # type: ignore
 from langchain_community.document_loaders.base import BaseLoader
 from langchain_core.documents import Document
 
 OPERATION_TIMEOUT_SECONDS = 240
+MUTATION_BATCH_SIZE = 1000
 
 CONTENT_COL_NAME = "page_content"
 METADATA_COL_NAME = "langchain_metadata"
 
+def _load_row_to_doc(format: str, content_columns: List[str], metadata_columns: List[str], row: Dict) -> Document:
+    include_headers = ["JSON", "YAML"]
+    if format in include_headers:
+        page_content = " ".join(
+            f"{c}: {str(row[c])}" for c in content_columns if c in row
+        )
+    else:
+        page_content = " ".join(str(row[c]) for c in content_columns if c in row)
+
+    if not page_content:
+        raise Exception("column page_content doesn't exist.")
+
+    metadata: Dict[str, Any] = {}
+    if METADATA_COL_NAME in metadata_columns and row.get(METADATA_COL_NAME):
+        metadata = {**metadata, **row[METADATA_COL_NAME]}
+
+    for c in metadata_columns:
+        if c in row and c != METADATA_COL_NAME:
+            metadata[c] = row[c]
+
+    return Document(page_content=page_content, metadata=metadata)
+
+def _load_doc_to_row(column_names: List[str], doc: Document, metadata_json_column: Optional[str]) -> Dict:
+    doc_metadata = doc.metadata.copy()
+    row: Dict[str, Any] = {"page_content": doc.page_content}
+    for entry in doc.metadata:
+        if entry in column_names:
+            row[entry] = doc_metadata[entry]
+            del doc_metadata[entry]
+    # store extra metadata in metadata_json_column in json format
+    if metadata_json_column and metadata_json_column in column_names:
+        row[metadata_json_column] = doc_metadata
+    elif METADATA_COL_NAME in column_names:
+        row[METADATA_COL_NAME] = doc_metadata
+    return row
+
+def _batch(datas, size=1):
+    data_length = len(datas)
+    for current in range(0, data_length, size):
+        yield datas[current:min(current+size, data_length)]
 
 class SpannerDocumentSaver:
     """Save docs to Google Cloud Spanner."""
-    def __init__(self, instance: str, database: str, table_name: str, client: Optional[Client] = Client(),):
+
+    def __init__(
+        self,
+        instance: str,
+        database: str,
+        table_name: str,
+        client: Optional[Client] = Client(),
+        content_column: Optional[str],
+        metadata_columns: List[str] = [],
+        metadata_json_column: Optional[str],
+    ):
         """Initialize Spanner document saver.
 
         Args:
@@ -37,11 +89,18 @@ class SpannerDocumentSaver:
             database: The Spanner database to load data to.
             table_name: The table name to load data to.
             client: Optional. The connection object to use. This can be used to customized project id and credentials.
+            content_columns: Optional. The name of the content column. Defaulted to the first column.
+            metadata_columns: Optional. This is for user to opt-in a selection of columns to use. Defaulted to use
+                              all columns.
+            metadata_json_column: Optional. The name of the special JSON column. Defaulted to use "langchain_metadata".
         """
         self.instance = instance
         self.database = database
         self.table_name = table_name
         self.client = client
+        self.content_columns = content_columns
+        self.metadata_columns = metadata_columns
+        self.metadata_json_column = metadata_json_column
         spanner_instance = self.client.instance(instance)
         if not spanner_instance.exists():
             raise Exception("Instance doesn't exist.")
@@ -57,27 +116,32 @@ class SpannerDocumentSaver:
     def add_documents(self, documents: List[Document]):
         """Add documents to the Spanner table."""
         db = self.client.instance(self.instance).database(self.database)
-        values = [(doc.page_content, json.dumps(doc.metadata)) for doc in documents]
-        # do a batch, but also split large inputs into multiple batches.
-        with db.batch() as batch:
-            batch.insert(
-                table=self.table_name,
-                columns=(CONTENT_COL_NAME, METADATA_COL_NAME),
-                values = values,
-            )
+        values = [ _load_doc_to_row(column_names, doc, self.metadata_json_column) for doc in documents]
+        # TEST THIS OUT
+        columns = (self.content_column or CONTENT_COL_NAME)
+        for metadata in self.metadata_columns:
+            columns += (metadata,)
+        columns += (self.metadata_json_column or METADATA_COL_NAME,)
+
+        for values_batch in _batch(values, MUTATION_BATCH_SIZE):
+            with db.batch() as batch:
+                batch.insert(
+                    table=self.table_name,
+                    columns=columns,
+                    values=values_batch,
+                )
 
     def delete(self, documents: List[Document]):
         """Delete documents from the table."""
         database = self.client.instance(self.instance).database(self.database)
-        keys = [doc.page_content for doc in documents]
-        docs_to_delete = KeySet(keys=keys)
-        with database.batch() as batch:
-            batch.delete(self.table_name, docs_to_delete)
-        # query = f"""DELETE FROM {self.table_name} WHERE
-        #             {CONTENT_COL_NAME} IN {docs_to_delete}"""
-        # row_deleted = database.execute_partitioned_dml(query)
+        keys = [[doc.page_content] for doc in documents]
+        for keys_batch in _batch(keys, MUTATION_BATCH_SIZE):
+            docs_to_delete = KeySet(keys=keys_batch)
+            with database.batch() as batch:
+                # Delete based on comparing the whole document instead of just the key
+                batch.delete(self.table_name, docs_to_delete)
 
-    @staticmethod
+    @classmethod
     def init_document_table(
         cls,
         instance_name: str,
@@ -88,7 +152,6 @@ class SpannerDocumentSaver:
         store_metadata: bool = True,
     ):
         saver = cls(instance_name, database_name, table_name)
-        saver.create_table(content_column, metadata_columns)
 
     def create_table(
         self,
@@ -110,6 +173,7 @@ class SpannerDocumentSaver:
         database = self.client.instance(self.instance).database(self.database)
         operation = database.update_ddl([ddl])
         operation.result(OPERATION_TIMEOUT_SECONDS)
+
 
 class SpannerLoader(BaseLoader):
     """Loads data from Google CLoud Spanner."""
@@ -159,50 +223,41 @@ class SpannerLoader(BaseLoader):
             raise Exception("Database doesn't exist.")
 
     def load(self) -> List[Document]:
-        """Load documents."""
+        """
+        Load langchain documents from a Spanner database.
+
+        Returns:
+            (List[langchain_core.documents.Document]): a list of Documents with metadata
+            from specific columns.
+        """
         return list(self.lazy_load())
 
-    def lazy_load(self) -> List[Document]:
-        """A lazy loader for Documents."""
+    def lazy_load(self) -> Iterator[Document]:
+        """
+        A lazy loader for langchain documents from a Spanner database. Use lazy load to avoid
+        caching all documents in memory at once.
+
+        Returns:
+            (Iterator[langchain_core.documents.Document]): a list of Documents with metadata
+            from specific columns.
+        """
         instance = self.client.instance(self.instance)
         db = instance.database(self.database)
         duration = datetime.timedelta(seconds=self.staleness)
-        with db.snapshot(exact_staleness=duration) as snapshot:
-        # with db.batch_snapshot(exact_staleness=duration) as snapshot:
-            keyset = KeySet(all_=True)
-            try:
-                results = snapshot.execute_sql(
-                    sql=self.query, data_boost_enabled=self.databoost
-                ).to_dict_list()
-                # results = snapshot.generate_query_batches(sql=self.query, data_boost_enabled=self.databost).to_dict_list()
-            except:
-                raise Exception("Fail to execute query")
-            formatted_results = [self.load_row_to_document(row) for row in results]
-            print(formatted_results)
-            yield formatted_results
-
-    def load_row_to_document(self, row):
-        include_headers = ["JSON", "YAML"]
-        page_content = ""
-        if self.format in include_headers:
-            page_content = f"{CONTENT_COL_NAME}: "
-        page_content += row[CONTENT_COL_NAME]
-        if not page_content:
-            raise Exception("column page_content doesn't exist.")
-
-        for c in self.content_columns:
-            if self.format in include_headers:
-                page_content += f"\n{c}: "
-            page_content += f" {row[c]}"
-
-        if self.metadata_columns:
-            metadata = {}
-            for m in self.metadata_columns:
-                metadata = {**metadata, **row[m]}
-        else:
-            metadata = row[METADATA_COL_NAME]
-            for k in row:
-                if (k != CONTENT_COL_NAME) and (k != METADATA_COL_NAME):
-                    metadata[k] = row[k]
-
-        return Document(page_content=page_content, metadata=metadata)
+        snapshot = db.batch_snapshot(exact_staleness=duration)
+        keyset = KeySet(all_=True)
+        partitions = snapshot.generate_query_batches(
+            sql=self.query, data_boost_enabled=self.databoost
+        )
+        for partition in partitions:
+            r = snapshot.process_query_batch(partition)
+            results = r.to_dict_list()
+            if len(results) == 0:
+                break
+            column_names = [f.name for f in r.fields]
+            content_columns = self.content_columns or [column_names[0]]
+            metadata_columns = self.metadata_columns or [
+                col for col in column_names if col not in content_columns
+            ]
+            for row in results:
+                yield _load_row_to_doc(self.format, content_columns, metadata_columns, row)
