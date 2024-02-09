@@ -323,8 +323,8 @@ class SpannerDocumentSaver:
     ):
         """Create a new table in Spanner database."""
         database = client.instance(instance).database(database)
+        database.reload()
         dialect = database.database_dialect
-        print(f"database is {database}, and dialect is {dialect}")
 
         ddl = f"CREATE TABLE {table_name} ("
         if dialect == DatabaseDialect.POSTGRESQL:

@@ -38,6 +38,7 @@ def client() -> Client:
 def setup_google_client(client) -> Client:
     database = client.instance(instance).database(google_database)
     operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
+    print("table dropped")
     operation.result(OPERATION_TIMEOUT_SECONDS)
     yield client
 
@@ -83,9 +84,7 @@ class TestSpannerDocumentLoader:
                     "product_name": "cards",
                     "description": "playing cards are cool",
                     "price": 10,
-                    "extra_metadata": {
-                        "baz": "foobar",
-                    },
+                    "extra_metadata": "foobar",
                     "langchain_metadata": {
                         "foo": "bar",
                     },
@@ -104,9 +103,7 @@ class TestSpannerDocumentLoader:
                     Document(
                         page_content="1",
                         metadata={
-                            "extra_metadata": {
-                                "baz": "foobar",
-                            },
+                            "extra_metadata": "foobar",
                             "foo": "bar",
                             "product_name": "cards",
                             "description": "playing cards are cool",
@@ -152,9 +149,7 @@ class TestSpannerDocumentLoader:
             Document(
                 page_content="playing cards are cool 10",
                 metadata={
-                    "extra_metadata": {
-                        "baz": "foobar",
-                    },
+                    "extra_metadata": "foobar",
                     "foo": "bar",
                     "product_id": "1",
                     "product_name": "cards",
@@ -197,31 +192,6 @@ class TestSpannerDocumentLoader:
             ),
         ]
 
-    def test_loader_custom_json_metadata(self, client):
-        query = f"SELECT * FROM {table_name}"
-        loader = SpannerLoader(
-            instance,
-            google_database,
-            query,
-            client=client,
-            metadata_json_column="extra_metadata",
-        )
-        docs = loader.load()
-        assert docs == [
-            Document(
-                page_content="1",
-                metadata={
-                    "product_name": "cards",
-                    "description": "playing cards are cool",
-                    "price": 10,
-                    "langchain_metadata": {
-                        "foo": "bar",
-                    },
-                    "baz": "foobar",
-                },
-            ),
-        ]
-
     def test_loader_custom_format_json(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
@@ -237,9 +207,7 @@ class TestSpannerDocumentLoader:
             Document(
                 page_content="product_id: 1 product_name: cards",
                 metadata={
-                    "extra_metadata": {
-                        "baz": "foobar",
-                    },
+                    "extra_metadata": "foobar",
                     "foo": "bar",
                     "description": "playing cards are cool",
                     "price": 10,
@@ -261,9 +229,7 @@ class TestSpannerDocumentLoader:
                     "description": "playing cards are cool",
                     "price": 10,
                     "foo": "bar",
-                    "extra_metadata": {
-                        "baz": "foobar",
-                    },
+                    "extra_metadata": "foobar",
                 },
             )
         ]
@@ -282,9 +248,7 @@ class TestSpannerDocumentLoader:
                     "description": "playing cards are cool",
                     "price": 10,
                     "foo": "bar",
-                    "extra_metadata": {
-                        "baz": "foobar",
-                    },
+                    "extra_metadata": "foobar",
                 },
             )
         ]
@@ -299,6 +263,69 @@ class TestSpannerDocumentLoader:
                 client,
                 format="NOT_A_FORMAT",
             )
+
+    def test_loader_custom_json_metadata(self, client):
+        database = client.instance(instance).database(google_database)
+        operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
+        operation.result(OPERATION_TIMEOUT_SECONDS)
+        SpannerDocumentSaver.init_document_table(
+            instance,
+            google_database,
+            table_name,
+            content_column="product_id",
+            metadata_columns=[
+                ("product_name", "STRING(1024)", True),
+                ("description", "JSON", False),
+                ("price", "INT64", False),
+            ],
+        )
+
+        saver = SpannerDocumentSaver(
+            instance,
+            google_database,
+            table_name,
+            client,
+            content_column="product_id",
+            metadata_columns=["product_name", "description", "price"],
+        )
+        test_documents = [
+            Document(
+                page_content="1",
+                metadata={
+                    "product_name": "cards",
+                    "description": json.loads('{"player1": "playing cards are cool"}'),
+                    "price": 10,
+                    "extra_metadata": "foobar",
+                    "langchain_metadata": {
+                        "foo": "bar",
+                    },
+                },
+            ),
+        ]
+        saver.add_documents(test_documents)
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance,
+            google_database,
+            query,
+            client=client,
+            metadata_json_column="description",
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="1",
+                metadata={
+                    "product_name": "cards",
+                    "player1": "playing cards are cool",
+                    "price": 10,
+                    "langchain_metadata": {
+                        "foo": "bar",
+                        "extra_metadata": "foobar",
+                    },
+                },
+            ),
+        ]
 
 
 class TestSpannerDocumentSaver:
@@ -347,7 +374,7 @@ class TestSpannerDocumentSaver:
             content_column="my_page_content",
             metadata_columns=[
                 ("category", "STRING(35)", True),
-                ("price", "FLOAT64", False),
+                ("price", "INT64", False),
             ],
             primary_key="my_page_content",
             store_metadata=True,
@@ -357,7 +384,7 @@ class TestSpannerDocumentSaver:
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            client=pg_client, instance=instance, database=pg_database, query=query
+            client=google_client, instance=instance, database=pg_database, query=query
         )
         expected_docs = [
             Document(
@@ -385,8 +412,8 @@ class TestSpannerDocumentSaver:
             table_name,
             content_column="my_page_content",
             metadata_columns=[
-                ("category", "STRING(35)", True),
-                ("price", "FLOAT64", False),
+                ("category", "VARCHAR(35)", True),
+                ("price", "INT", False),
             ],
             primary_key="my_page_content",
             store_metadata=True,
