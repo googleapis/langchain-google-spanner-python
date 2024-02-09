@@ -26,6 +26,7 @@ from typing import (
     Callable,
     Iterable,
     List,
+    Dict,
     Optional,
     Tuple,
     Type,
@@ -37,12 +38,14 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from google.cloud import spanner
 from google.cloud.spanner import Client
+from google.cloud.spanner_v1.streamed import StreamedResultSet
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
 from enum import Enum
+import numpy as np
 from abc import ABC, abstractmethod
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
-
+from langchain_community.vectorstores.utils import maximal_marginal_relevance
 logger = logging.getLogger(__name__)
 
 
@@ -50,7 +53,7 @@ ID_COLUMN_NAME = "id"
 CONTENT_COLUMN_NAME = "content"
 EMBEDDING_COLUMN_NAME = "embedding"
 ADDITIONAL_METADATA_COLUMN_NAME = "metadata"
-
+KNN_DISTANCE_SEARCH_QUERY_ALIAS = "distance"
 
 from dataclasses import dataclass
 
@@ -557,8 +560,13 @@ class SpannerVectorStore(VectorStore):
         Returns:
             List[Document]: List of documents most similar to the query.
         """
-        DISTANCE_SELECT_QUERY_NAME = "distance"
+        
+        results, column_order_map = self._get_rows_by_similarity_search(embedding, k, pre_filter)
+        documents = self._get_documents_from_query_results(list(results), column_order_map)            
+        return documents
+    
 
+    def _get_rows_by_similarity_search(self, embedding: List[float], k: int, pre_filter: Optional[str] = None, **kwargs: Any):
         staleness = self._query_parameters.staleness
         staleness = datetime.timedelta(seconds=staleness)
 
@@ -573,7 +581,7 @@ class SpannerVectorStore(VectorStore):
 
         select_column_names = ",".join(self._columns_to_insert) + ","
         column_order_map = {value: index for index, value in enumerate(self._columns_to_insert)}
-        column_order_map[DISTANCE_SELECT_QUERY_NAME] = len(self._columns_to_insert)
+        column_order_map[KNN_DISTANCE_SEARCH_QUERY_ALIAS] = len(self._columns_to_insert)
 
 
         sql_query = """
@@ -590,7 +598,7 @@ class SpannerVectorStore(VectorStore):
             filter=pre_filter if pre_filter is not None else "1 = 1",
             k_count=k,
             distance_function=distance_function,
-            distance_alias=DISTANCE_SELECT_QUERY_NAME,
+            distance_alias=KNN_DISTANCE_SEARCH_QUERY_ALIAS,
         )
 
         with self._database.snapshot(exact_staleness=staleness) as snapshot:
@@ -602,23 +610,29 @@ class SpannerVectorStore(VectorStore):
                 },
             )
 
-            documents = []
-            for row in results:
-                page_content = row[column_order_map[self._content_column]]
+            return list(results), column_order_map
 
-                if self._metadata_json_column is not None and row[column_order_map[self._metadata_json_column]]:
-                    metadata = row[column_order_map[self._metadata_json_column]]
-                else:
-                    metadata = {
-                        key: row[column_order_map[key]]
-                        for key in self._metadata_columns
-                        if row[column_order_map[key]] is not None
-                    }
 
-                doc = Document(page_content=page_content, metadata=metadata)
-                documents.append((doc, row[column_order_map[DISTANCE_SELECT_QUERY_NAME]]))
+    def _get_documents_from_query_results(self, results: List[List], column_order_map: Dict[str, int]) -> List[Tuple[Document, float]]:
+        documents = []
+
+        for row in results:
+            page_content = row[column_order_map[self._content_column]]
+
+            if self._metadata_json_column is not None and row[column_order_map[self._metadata_json_column]]:
+                metadata = row[column_order_map[self._metadata_json_column]]
+            else:
+                metadata = {
+                    key: row[column_order_map[key]]
+                    for key in self._metadata_columns
+                    if row[column_order_map[key]] is not None
+                }
+
+            doc = Document(page_content=page_content, metadata=metadata)
+            documents.append((doc, row[column_order_map[KNN_DISTANCE_SEARCH_QUERY_ALIAS]]))
 
         return documents
+    
 
     def similarity_search(
         self, query: str, k: int = 4, pre_filter: Optional[str] = None, **kwargs: Any
@@ -678,6 +692,110 @@ class SpannerVectorStore(VectorStore):
             embedding=embedding, k=k, pre_filter = pre_filter
         )
         return [doc for doc, _ in documents]
+    
+
+    def max_marginal_relevance_search_with_score_by_vector(
+        self,
+        embedding: List[float],
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        pre_filter: Optional[str] = None,
+    ) -> List[Tuple[Document, float]]:
+        """Return docs and their similarity scores selected using the maximal marginal
+            relevance.
+
+        Maximal marginal relevance optimizes for similarity to query AND diversity
+        among selected documents.
+
+        Args:
+            embedding: Embedding to look up documents similar to.
+            k: Number of Documents to return. Defaults to 4.
+            fetch_k: Number of Documents to fetch before filtering to
+                     pass to MMR algorithm.
+            lambda_mult: Number between 0 and 1 that determines the degree
+                        of diversity among the results with 0 corresponding
+                        to maximum diversity and 1 to minimum diversity.
+                        Defaults to 0.5.
+        Returns:
+            List of Documents and similarity scores selected by maximal marginal
+                relevance and score for each.
+        """
+        results, column_order_map = self._get_rows_by_similarity_search(embedding, fetch_k, pre_filter)
+
+        embeddings = [result[column_order_map[self._embedding_column]] for result in results]
+        
+        
+        mmr_selected = maximal_marginal_relevance(
+            np.array([embedding], dtype=np.float32),
+            embeddings,
+            k=k,
+            lambda_mult=lambda_mult,
+        )
+
+        search_results = [results[i] for i in mmr_selected]
+        documents_with_scores = self._get_documents_from_query_results(list(search_results), column_order_map)  
+
+        return documents_with_scores
+
+    def max_marginal_relevance_search_by_vector(
+        self,
+        embedding: List[float],
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        pre_filter: Optional[str] = None,
+        **kwargs: Any,
+    ) -> List[Document]:
+        """Return docs selected using the maximal marginal relevance.
+
+        Maximal marginal relevance optimizes for similarity to query AND diversity
+        among selected documents.
+
+        Args:
+            embedding: Embedding to look up documents similar to.
+            k: Number of Documents to return. Defaults to 4.
+            fetch_k: Number of Documents to fetch to pass to MMR algorithm.
+            lambda_mult: Number between 0 and 1 that determines the degree
+                        of diversity among the results with 0 corresponding
+                        to maximum diversity and 1 to minimum diversity.
+                        Defaults to 0.5.
+        Returns:
+            List of Documents selected by maximal marginal relevance.
+        """
+        documents_with_scores = self.max_marginal_relevance_search_with_score_by_vector(embedding, k, fetch_k, lambda_mult, pre_filter)
+
+        return [doc for doc, _ in documents_with_scores]
+
+    def max_marginal_relevance_search(
+            self,
+            query: str,
+            k: int = 4,
+            fetch_k: int = 20,
+            lambda_mult: float = 0.5,
+            pre_filter: Optional[str] = None,
+            **kwargs: Any,
+        ) -> List[Document]:
+            """Return docs selected using the maximal marginal relevance.
+
+            Maximal marginal relevance optimizes for similarity to query AND diversity
+            among selected documents.
+
+            Args:
+                query: Text to look up documents similar to.
+                k: Number of Documents to return. Defaults to 4.
+                fetch_k: Number of Documents to fetch to pass to MMR algorithm.
+                lambda_mult: Number between 0 and 1 that determines the degree
+                            of diversity among the results with 0 corresponding
+                            to maximum diversity and 1 to minimum diversity.
+                            Defaults to 0.5.
+            Returns:
+                List of Documents selected by maximal marginal relevance.
+            """
+            embedding = self._embedding_service.embed_query(query)
+            documents = self.max_marginal_relevance_search_by_vector(embedding, k, fetch_k, lambda_mult, pre_filter)
+            return documents
+        
 
     @classmethod
     def from_documents(
