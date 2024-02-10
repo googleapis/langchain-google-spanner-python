@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-import os
 import json
+import os
+
+import pytest
 from google.cloud.spanner import Client, KeySet  # type: ignore
 from langchain_core.documents import Document
 
@@ -24,7 +25,7 @@ project_id = os.environ["PROJECT_ID"]
 instance = os.environ["INSTANCE_ID"]
 google_database = os.environ["GOOGLE_DATABASE"]
 pg_database = os.environ["PG_DATABASE"]
-table_name = os.environ["TABLE_NAME"]
+table_name = os.environ["TABLE_NAME"].replace("-","_")
 
 OPERATION_TIMEOUT_SECONDS = 240
 
@@ -33,25 +34,7 @@ OPERATION_TIMEOUT_SECONDS = 240
 def client() -> Client:
     return Client(project=project_id)
 
-
-@pytest.fixture(name="google_client")
-def setup_google_client(client) -> Client:
-    database = client.instance(instance).database(google_database)
-    operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
-    print("table dropped")
-    operation.result(OPERATION_TIMEOUT_SECONDS)
-    yield client
-
-
-@pytest.fixture(name="pg_client")
-def setup_pg_client(client) -> Client:
-    database = client.instance(instance).database(pg_database)
-    operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
-    operation.result(OPERATION_TIMEOUT_SECONDS)
-    yield client
-
-
-class TestSpannerDocumentLoader:
+class TestSpannerDocumentLoaderGoogleSQL:
     @pytest.fixture(autouse=True, scope="class")
     def setup_database(self, client):
         database = client.instance(instance).database(google_database)
@@ -275,9 +258,10 @@ class TestSpannerDocumentLoader:
             content_column="product_id",
             metadata_columns=[
                 ("product_name", "STRING(1024)", True),
-                ("description", "JSON", False),
+                ("description", "STRING(1024)", False),
                 ("price", "INT64", False),
             ],
+            metadata_json_column="my_metadata",
         )
 
         saver = SpannerDocumentSaver(
@@ -287,16 +271,17 @@ class TestSpannerDocumentLoader:
             client,
             content_column="product_id",
             metadata_columns=["product_name", "description", "price"],
+            metadata_json_column="my_metadata",
         )
         test_documents = [
             Document(
                 page_content="1",
                 metadata={
                     "product_name": "cards",
-                    "description": json.loads('{"player1": "playing cards are cool"}'),
+                    "description": "playing cards are cool",
                     "price": 10,
                     "extra_metadata": "foobar",
-                    "langchain_metadata": {
+                    "my_metadata": {
                         "foo": "bar",
                     },
                 },
@@ -309,7 +294,7 @@ class TestSpannerDocumentLoader:
             google_database,
             query,
             client=client,
-            metadata_json_column="description",
+            metadata_json_column="my_metadata",
         )
         docs = loader.load()
         assert docs == [
@@ -317,18 +302,309 @@ class TestSpannerDocumentLoader:
                 page_content="1",
                 metadata={
                     "product_name": "cards",
-                    "player1": "playing cards are cool",
+                    "description": "playing cards are cool",
                     "price": 10,
+                    "foo": "bar",
+                    "extra_metadata": "foobar",
+                },
+            ),
+        ]
+
+
+class TestSpannerDocumentLoaderPostgreSQL:
+    @pytest.fixture(autouse=True, scope="class")
+    def setup_database(self, client):
+        database = client.instance(instance).database(pg_database)
+        operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
+        operation.result(OPERATION_TIMEOUT_SECONDS)
+        SpannerDocumentSaver.init_document_table(
+            instance,
+            pg_database,
+            table_name,
+            content_column="product_id",
+            metadata_columns=[
+                ("product_name", "VARCHAR(1024)", True),
+                ("description", "VARCHAR(1024)", False),
+                ("price", "INT", False),
+            ],
+        )
+
+        saver = SpannerDocumentSaver(
+            instance,
+            pg_database,
+            table_name,
+            client,
+            content_column="product_id",
+            metadata_columns=["product_name", "description", "price"],
+        )
+        test_documents = [
+            Document(
+                page_content="1",
+                metadata={
+                    "product_name": "cards",
+                    "description": "playing cards are cool",
+                    "price": 10,
+                    "extra_metadata": "foobar",
                     "langchain_metadata": {
                         "foo": "bar",
-                        "extra_metadata": "foobar",
                     },
+                },
+            ),
+        ]
+        saver.add_documents(test_documents)
+
+    # Default CUJs
+    @pytest.mark.parametrize(
+        "query, expected",
+        [
+            pytest.param(
+                f"SELECT * FROM {table_name}",
+                [
+                    Document(
+                        page_content="1",
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "product_name": "cards",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                        },
+                    )
+                ],
+            ),
+            pytest.param(
+                f"SELECT product_name, description FROM {table_name}",
+                [
+                    Document(
+                        page_content="cards",
+                        metadata={
+                            "description": "playing cards are cool",
+                        },
+                    )
+                ],
+            ),
+        ],
+    )
+    def test_loader_with_query(self, client, query, expected):
+        loader = SpannerLoader(instance, pg_database, query, client=client)
+        docs = loader.load()
+        assert docs == expected
+
+    def test_loader_missing_table_and_query(self):
+        with pytest.raises(Exception):
+            SpannerLoader(instance, pg_database)
+
+    # Custom CUJs
+    def test_loader_custom_content(self, client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance,
+            pg_database,
+            query,
+            client=client,
+            content_columns=["description", "price"],
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="playing cards are cool 10",
+                metadata={
+                    "extra_metadata": "foobar",
+                    "foo": "bar",
+                    "product_id": "1",
+                    "product_name": "cards",
+                },
+            ),
+        ]
+
+    def test_loader_custom_metadata(self, client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance,
+            pg_database,
+            query,
+            client=client,
+            metadata_columns=["product_name", "price"],
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="1",
+                metadata={"product_name": "cards", "price": 10},
+            ),
+        ]
+
+    def test_loader_custom_content_and_metadata(self, client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance,
+            pg_database,
+            query,
+            client=client,
+            content_columns=["product_name"],
+            metadata_columns=["product_id", "price"],
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="cards",
+                metadata={"product_id": "1", "price": 10},
+            ),
+        ]
+
+    def test_loader_custom_format_json(self, client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance,
+            pg_database,
+            query,
+            client=client,
+            content_columns=["product_id", "product_name"],
+            format="JSON",
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="product_id: 1 product_name: cards",
+                metadata={
+                    "extra_metadata": "foobar",
+                    "foo": "bar",
+                    "description": "playing cards are cool",
+                    "price": 10,
+                },
+            )
+        ]
+
+    def test_loader_custom_format_yaml(self, client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance, pg_database, query, client=client, format="YAML"
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="product_id: 1",
+                metadata={
+                    "product_name": "cards",
+                    "description": "playing cards are cool",
+                    "price": 10,
+                    "foo": "bar",
+                    "extra_metadata": "foobar",
+                },
+            )
+        ]
+
+    def test_loader_custom_format_csv(self, client):
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance, pg_database, query, client=client, format="CSV"
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="1",
+                metadata={
+                    "product_name": "cards",
+                    "description": "playing cards are cool",
+                    "price": 10,
+                    "foo": "bar",
+                    "extra_metadata": "foobar",
+                },
+            )
+        ]
+
+    def test_loader_custom_format_error(self, client):
+        query = f"SELECT * FROM {table_name}"
+        with pytest.raises(Exception):
+            SpannerLoader(
+                instance,
+                pg_database,
+                query,
+                client,
+                format="NOT_A_FORMAT",
+            )
+
+    def test_loader_custom_json_metadata(self, client):
+        database = client.instance(instance).database(pg_database)
+        operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
+        operation.result(OPERATION_TIMEOUT_SECONDS)
+        SpannerDocumentSaver.init_document_table(
+            instance,
+            pg_database,
+            table_name,
+            content_column="product_id",
+            metadata_columns=[
+                ("product_name", "VARCHAR(1024)", True),
+                ("description", "VARCHAR(1024)", False),
+                ("price", "INT", False),
+            ],
+            metadata_json_column="my_metadata",
+        )
+
+        saver = SpannerDocumentSaver(
+            instance,
+            pg_database,
+            table_name,
+            client,
+            content_column="product_id",
+            metadata_columns=["product_name", "description", "price"],
+            metadata_json_column="my_metadata",
+        )
+        test_documents = [
+            Document(
+                page_content="1",
+                metadata={
+                    "product_name": "cards",
+                    "description": "playing cards are cool",
+                    "price": 10,
+                    "extra_metadata": "foobar",
+                    "my_metadata": {
+                        "foo": "bar",
+                    },
+                },
+            ),
+        ]
+        saver.add_documents(test_documents)
+        query = f"SELECT * FROM {table_name}"
+        loader = SpannerLoader(
+            instance,
+            pg_database,
+            query,
+            client=client,
+            metadata_json_column="my_metadata",
+        )
+        docs = loader.load()
+        assert docs == [
+            Document(
+                page_content="1",
+                metadata={
+                    "product_name": "cards",
+                    "description": "playing cards are cool",
+                    "price": 10,
+                    "foo": "bar",
+                    "extra_metadata": "foobar",
                 },
             ),
         ]
 
 
 class TestSpannerDocumentSaver:
+    @pytest.fixture(name="google_client")
+    def setup_google_client(self, client) -> Client:
+        database = client.instance(instance).database(google_database)
+        operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
+        print("table dropped")
+        operation.result(OPERATION_TIMEOUT_SECONDS)
+        yield client
+
+
+    @pytest.fixture(name="pg_client")
+    def setup_pg_client(self, client) -> Client:
+        database = client.instance(instance).database(pg_database)
+        operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
+        operation.result(OPERATION_TIMEOUT_SECONDS)
+        yield client
+
     def test_saver_google_sql(self, google_client):
         SpannerDocumentSaver.init_document_table(instance, google_database, table_name)
         saver = SpannerDocumentSaver(
@@ -384,7 +660,10 @@ class TestSpannerDocumentSaver:
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            client=google_client, instance=instance, database=pg_database, query=query
+            client=google_client,
+            instance=instance,
+            database=google_database,
+            query=query,
         )
         expected_docs = [
             Document(
