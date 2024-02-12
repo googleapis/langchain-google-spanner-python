@@ -275,7 +275,7 @@ class SpannerVectorStore(VectorStore):
             else:
                 embedding_column = TableColumn(embedding_column, 'ARRAY<FLOAT64>', is_null=True)
 
-    
+
         configs = [id_column, content_column, embedding_column]
         configs.extend(column_configs)
         column_configs = configs
@@ -574,41 +574,50 @@ class SpannerVectorStore(VectorStore):
             columns = [self._id_column]
             values = ['(\'' + value + '\')' for value in ids]
         elif documents is not None:
-            pass
-            #ToDo: Pick it up later
-            # columns = [self._content_column] + self._metadata_columns
+            columns = [self._content_column] + self._metadata_columns
 
-            # if (self._metadata_json_column is not None):
-            #     columns.remove(self._metadata_json_column)
+            if (self._metadata_json_column is not None):
+                columns.remove(self._metadata_json_column)
 
-            # for doc in documents:
-            #     value: List[Any] = []
-            #     value.append(doc.page_content)
+            for doc in documents:
+                value: List[Any] = []
+                value.append(doc.page_content)
 
-            #     for column_name in self._metadata_columns:
-            #         value.append(doc.metadata.get(column_name))
-            #     values.append('(' +  ss + ')')
+                for column_name in columns:
+                    if (column_name != self._content_column):
+                        value.append(doc.metadata.get(column_name))
+
+                values.append(value)
 
 
         def delete_records(transaction):
-            column_expression = '(' + ', '.join(columns) + ')'
+            # ToDo: Debug why not working
+            base_delete_statement = "DELETE FROM {} WHERE ".format(self._table_name)
+            column_expression =  "(" + ','.join(columns) + ") = " + "$1"
 
-            sql_query = """
-                DELETE FROM {table_name} 
-                WHERE {column_expression} IN {struct_placeholder}
-                """.format(
-                    table_name=self._table_name,
-                    column_expression=column_expression,
-                    struct_placeholder=', '.join([f'({elem})' for elem in values])
-                )
-
-            print (sql_query, values)
-
-            results = transaction.execute_update(
-                dml=sql_query
+            record_type = param_types.Struct(
+                [
+                    param_types.StructField(column, param_types.STRING) for column in columns
+                ]
             )
 
-            print (results)
+            # Concatenate the conditions with the base DELETE statement
+            sql_delete = base_delete_statement + column_expression
+
+            # Iterate over the list of lists of values
+            for value_tuple in values:
+                # Construct the params dictionary
+                values_tuple_param = tuple(value_tuple)
+
+                print("Executing SQL:", sql_delete)
+                print("Params:", values_tuple_param)
+
+                results = transaction.execute_update(
+                    dml=sql_delete,  params={"p1": values_tuple_param},
+                    param_types={"p1": record_type},
+                )
+
+                print (results)
 
         self._database.run_in_transaction(delete_records)
 
