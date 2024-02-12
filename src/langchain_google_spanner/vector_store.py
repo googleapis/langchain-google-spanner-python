@@ -52,7 +52,6 @@ logger = logging.getLogger(__name__)
 ID_COLUMN_NAME = "id"
 CONTENT_COLUMN_NAME = "content"
 EMBEDDING_COLUMN_NAME = "embedding"
-PRIMARY_KEY_DEFAULT = ID_COLUMN_NAME + "," + CONTENT_COLUMN_NAME + "," + EMBEDDING_COLUMN_NAME
 ADDITIONAL_METADATA_COLUMN_NAME = "metadata"
 KNN_DISTANCE_SEARCH_QUERY_ALIAS = "distance"
 
@@ -182,8 +181,8 @@ class SpannerVectorStore(VectorStore):
         id_column: Union[str, TableColumn] = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
-        primary_key: str = PRIMARY_KEY_DEFAULT,
         metadata_columns: Optional[List[TableColumn]] = None,
+        primary_key: Optional[str] = None,
         vector_size: Optional[int] = None,
     ):
         """
@@ -222,6 +221,8 @@ class SpannerVectorStore(VectorStore):
             metadata_columns,
             primary_key
         )
+
+        print (ddl)
 
         operation = database.update_ddl([ddl])
 
@@ -274,8 +275,13 @@ class SpannerVectorStore(VectorStore):
             else:
                 embedding_column = TableColumn(embedding_column, 'ARRAY<FLOAT64>', is_null=True)
 
+    
+        configs = [id_column, content_column, embedding_column]
+        configs.extend(column_configs)
+        column_configs = configs
 
-        column_configs = [id_column, content_column, embedding_column].extend(column_config)
+        if primary_key is None:
+            primary_key = id_column.name + "," + content_column.name
 
         if column_configs is not None:
             for column_config in column_configs:
