@@ -355,7 +355,7 @@ class SpannerVectorStore(VectorStore):
 
         self._database.reload()
 
-        self._dialect_semantics = GoogleSqlSemnatics();
+        self._dialect_semantics: DialectSemantics = GoogleSqlSemnatics();
         types = self.GSQL_TYPES
 
         if self._database.database_dialect == DatabaseDialect.POSTGRESQL:
