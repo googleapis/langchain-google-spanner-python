@@ -574,41 +574,41 @@ class SpannerVectorStore(VectorStore):
             columns = [self._id_column]
             values = ['(\'' + value + '\')' for value in ids]
         elif documents is not None:
-            pass
-            #ToDo: Pick it up later
-            # columns = [self._content_column] + self._metadata_columns
+            columns = [self._content_column] + self._metadata_columns
 
-            # if (self._metadata_json_column is not None):
-            #     columns.remove(self._metadata_json_column)
+            if (self._metadata_json_column is not None):
+                columns.remove(self._metadata_json_column)
 
-            # for doc in documents:
-            #     value: List[Any] = []
-            #     value.append(doc.page_content)
+            for doc in documents:
+                value: List[Any] = []
+                value.append(doc.page_content)
 
-            #     for column_name in self._metadata_columns:
-            #         value.append(doc.metadata.get(column_name))
-            #     values.append('(' +  ss + ')')
+                for column_name in self._metadata_columns:
+                    value.append(doc.metadata.get(column_name))
+
+                values.append(value)
 
 
         def delete_records(transaction):
-            column_expression = '(' + ', '.join(columns) + ')'
+            base_delete_statement = "DELETE FROM YourTable WHERE "
+            conditions = " AND ".join(["{} = @{}".format(column, column) for column in columns])
 
-            sql_query = """
-                DELETE FROM {table_name} 
-                WHERE {column_expression} IN {struct_placeholder}
-                """.format(
-                    table_name=self._table_name,
-                    column_expression=column_expression,
-                    struct_placeholder=', '.join([f'({elem})' for elem in values])
+            # Concatenate the conditions with the base DELETE statement
+            sql_delete = base_delete_statement + conditions
+
+            # Iterate over the list of lists of values
+            for value_tuple in values:
+                # Construct the params dictionary
+                params = {column: value for column, value in zip(columns, value_tuple)}
+
+                print("Executing SQL:", sql_delete)
+                print("Params:", params)
+
+                results = transaction.execute_update(
+                    dml=sql_delete, params=params
                 )
 
-            print (sql_query, values)
-
-            results = transaction.execute_update(
-                dml=sql_query
-            )
-
-            print (results)
+                print (results)
 
         self._database.run_in_transaction(delete_records)
 
