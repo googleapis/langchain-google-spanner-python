@@ -16,7 +16,7 @@ import datetime
 import json
 from typing import Dict, Iterator, List, Optional
 
-from google.cloud.spanner import Client, KeySet
+from google.cloud.spanner import Client, KeySet  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect  # type: ignore
 from google.cloud.spanner_v1.data_types import JsonObject  # type: ignore
 from langchain_community.document_loaders.base import BaseLoader
@@ -68,16 +68,15 @@ def _load_doc_to_row(table_fields: List[str], doc: Document, metadata_json_colum
             and col != metadata_json_column
             and col in doc_metadata
         ):
-            row += (doc_metadata[col],)
+            row = (*row, doc_metadata[col])  # type: ignore
             del doc_metadata[col]
     if metadata_json_column in table_fields:
         metadata_json = {}
-        print(f"metadata json column is {metadata_json_column}")
         if metadata_json_column in doc_metadata:
             metadata_json = doc_metadata[metadata_json_column]
             del doc_metadata[metadata_json_column]
         metadata_json = {**metadata_json, **doc_metadata}
-        row += (json.dumps(metadata_json),)
+        row += (json.dumps(metadata_json),)  # type: ignore
     return row
 
 
@@ -95,13 +94,13 @@ class SpannerLoader(BaseLoader):
         instance: str,
         database: str,
         query: str,
+        client: Client = Client(),
         content_columns: List[str] = [],
         metadata_columns: List[str] = [],
         format: str = "text",
         databoost: bool = False,
         metadata_json_column: str = "",
-        client: Optional[Client] = Client(),
-        staleness: Optional[int] = 0,
+        staleness: float = 0.0,
     ):
         """Initialize Spanner document loader.
 
@@ -109,6 +108,7 @@ class SpannerLoader(BaseLoader):
             instance: The Spanner instance to load data from.
             database: The Spanner database to load data from.
             query: A GoogleSQL or PostgreSQL query. Users must match dialect to their database.
+            client: The connection object to use. This can be used to customize project id and credentials.
             content_columns: The list of column(s) or field(s) to use for a Document's page content.
                               Page content is the default field for embeddings generation.
             metadata_columns: The list of column(s) or field(s) to use for metadata.
@@ -116,8 +116,7 @@ class SpannerLoader(BaseLoader):
                     Format included: 'text', 'JSON', 'YAML', 'CSV'.
             databoost: Use data boost on read. Note: needs extra IAM permissions and higher cost.
             metadata_json_column: The name of the JSON column to use as the metadata's base dictionary.
-            client: Optional. The connection object to use. This can be used to customize project id and credentials.
-            staleness: Optional. The time bound for stale read.
+            staleness: The time bound for stale read.
         """
         self.instance = instance
         self.database = database
@@ -271,7 +270,7 @@ class SpannerDocumentSaver:
         metadata_columns: List[Any] = [],
         primary_key: str = "",
         store_metadata: bool = True,
-        metadata_json_column: str = "",
+        metadata_json_column: Optional[str] = "",
     ):
         """
         Create a new table to store docs with a custom schema.
@@ -285,6 +284,7 @@ class SpannerDocumentSaver:
             primary_key: The name of the primary key.
             store_metadata: If true, extra metadata will be stored in the "langchain_metadata" column.
                             Defaulted to true.
+            metadata_json_column: Optional. The name of the special JSON column. Defaulted to use "langchain_metadata".
         """
         content_column = content_column or CONTENT_COL_NAME
         primary_key = primary_key or content_column
@@ -322,9 +322,9 @@ class SpannerDocumentSaver:
         metadata_columns: List[Any],
     ):
         """Create a new table in Spanner database."""
-        database = client.instance(instance).database(database)
-        database.reload()
-        dialect = database.database_dialect
+        spanner_database = client.instance(instance).database(database)
+        spanner_database.reload()
+        dialect = spanner_database.database_dialect
 
         ddl = f"CREATE TABLE {table_name} ("
         if dialect == DatabaseDialect.POSTGRESQL:
@@ -344,5 +344,5 @@ class SpannerDocumentSaver:
                 ddl += f"{metadata_json_column} JSON NOT NULL,"
             ddl += f") PRIMARY KEY ({primary_key})"
 
-        operation = database.update_ddl([ddl])
+        operation = spanner_database.update_ddl([ddl])
         operation.result(OPERATION_TIMEOUT_SECONDS)
