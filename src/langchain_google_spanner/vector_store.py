@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 ID_COLUMN_NAME = "id"
 CONTENT_COLUMN_NAME = "content"
 EMBEDDING_COLUMN_NAME = "embedding"
+PRIMARY_KEY_DEFAULT = ID_COLUMN_NAME + "," + CONTENT_COLUMN_NAME + "," + EMBEDDING_COLUMN_NAME
 ADDITIONAL_METADATA_COLUMN_NAME = "metadata"
 KNN_DISTANCE_SEARCH_QUERY_ALIAS = "distance"
 
@@ -157,6 +158,18 @@ class QueryParameters:
 
 
 class SpannerVectorStore(VectorStore):
+    GSQL_TYPES = {
+        CONTENT_COLUMN_NAME: ['STRING'],
+        EMBEDDING_COLUMN_NAME: ['ARRAY<FLOAT64>'],
+        'metadata_json_column': ['JSON']
+    }
+
+    PGSQL_TYPES = {
+        CONTENT_COLUMN_NAME: ['character varying'],
+        EMBEDDING_COLUMN_NAME: ['double precision[]'],
+        'metadata_json_column': ['jsonb']
+    }
+
     """
     A class for managing vector stores in Google Cloud Spanner.
     """
@@ -169,6 +182,7 @@ class SpannerVectorStore(VectorStore):
         id_column: Union[str, TableColumn] = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
+        primary_key: str = PRIMARY_KEY_DEFAULT,
         metadata_columns: Optional[List[TableColumn]] = None,
         vector_size: Optional[int] = None,
     ):
@@ -198,7 +212,6 @@ class SpannerVectorStore(VectorStore):
             raise Exception("Database with id-{} doesn't exist.".format(database_id))
 
         database.reload()
-        print (database, database.database_dialect)
 
         ddl = SpannerVectorStore._generate_sql(
             database.database_dialect,
@@ -207,9 +220,8 @@ class SpannerVectorStore(VectorStore):
             content_column,
             embedding_column,
             metadata_columns,
+            primary_key
         )
-
-        print (ddl)
 
         operation = database.update_ddl([ddl])
 
@@ -224,6 +236,7 @@ class SpannerVectorStore(VectorStore):
         content_column,
         embedding_column,
         column_configs,
+        primary_key
     ):
         """
         Generate SQL for creating the vector store table.
@@ -241,22 +254,28 @@ class SpannerVectorStore(VectorStore):
         """
         sql = f"CREATE TABLE {table_name} (\n"
 
-        if dialect == DatabaseDialect.POSTGRESQL:
-            column_sql = (
-                f"  {id_column} varchar(36) DEFAULT (spanner.generate_uuid()),\n"
-            )
-            sql += column_sql
-            column_sql = f"  {content_column} text,\n"
-            sql += column_sql
-            column_sql = f"  {embedding_column} float8[],\n"
-            sql += column_sql
-        else:
-            column_sql = f"  {id_column} STRING(36) DEFAULT (GENERATE_UUID()),\n"
-            sql += column_sql
-            column_sql = f"  {content_column} STRING(MAX),\n"
-            sql += column_sql
-            column_sql = f"  {embedding_column} ARRAY<FLOAT64>,\n"
-            sql += column_sql
+        if not isinstance(id_column, TableColumn):
+            if dialect == DatabaseDialect.POSTGRESQL:
+                id_column = TableColumn(id_column, 'varchar(36)', is_null=True)
+            else:
+                id_column = TableColumn(id_column, 'STRING(36)', is_null=True)
+
+
+        if not isinstance(content_column, TableColumn):
+            if dialect == DatabaseDialect.POSTGRESQL:
+                content_column = TableColumn(content_column, 'text', is_null=True)
+            else:
+                content_column = TableColumn(content_column, 'STRING(MAX)', is_null=True)
+
+
+        if not isinstance(embedding_column, TableColumn):
+            if dialect == DatabaseDialect.POSTGRESQL:
+                embedding_column = TableColumn(embedding_column, 'float8[]', is_null=True)
+            else:
+                embedding_column = TableColumn(embedding_column, 'ARRAY<FLOAT64>', is_null=True)
+
+
+        column_configs = [id_column, content_column, embedding_column].extend(column_config)
 
         if column_configs is not None:
             for column_config in column_configs:
@@ -273,9 +292,9 @@ class SpannerVectorStore(VectorStore):
 
         # Remove the last comma and newline, add closing parenthesis
         if dialect == DatabaseDialect.POSTGRESQL:
-             sql +=  "  PRIMARY KEY(" + id_column + ")\n)"
+             sql +=  "  PRIMARY KEY(" + primary_key + ")\n)"
         else:
-            sql = sql.rstrip(",\n") + "\n) PRIMARY KEY(" + id_column + ")"
+            sql = sql.rstrip(",\n") + "\n) PRIMARY KEY(" + primary_key + ")"
 
         return sql
 
@@ -323,6 +342,10 @@ class SpannerVectorStore(VectorStore):
         self._query_parameters = query_parameters
         self._embedding_service = embedding_service
 
+
+        if metadata_columns is not None and ignore_metadata_columns is not None:
+            raise Exception("Either opt-In and pass metadata_column or opt-out and pass ignore_metadata_columns.")
+
         instance = self._client.instance(instance_id)
 
         if not instance.exists():
@@ -332,11 +355,12 @@ class SpannerVectorStore(VectorStore):
 
         self._database.reload()
 
-        self._dialect_semantics = (
-            PGSqlSemnatics()
-            if self._database.database_dialect == DatabaseDialect.POSTGRESQL
-            else GoogleSqlSemnatics()
-        )
+        self._dialect_semantics = GoogleSqlSemnatics();
+        types = self.GSQL_TYPES
+
+        if self._database.database_dialect == DatabaseDialect.POSTGRESQL:
+               self._dialect_semantics = PGSqlSemnatics();
+               types = self.PGSQL_TYPES
 
         if not self._database.exists():
             raise Exception("Database with id-{} doesn't exist.".format(database_id))
@@ -348,8 +372,7 @@ class SpannerVectorStore(VectorStore):
             raise Exception("Table with name-{} doesn't exist.".format(table_name))
 
 
-        column_type_map = {column.name: column for column in table.schema}
-        self._validate_table_schema(column_type_map)
+        column_type_map = self._get_column_type_map(self._database, table_name)
 
         default_columns = [id_column, content_column, embedding_column]
 
@@ -370,10 +393,50 @@ class SpannerVectorStore(VectorStore):
 
         self._columns_to_insert = columns_to_insert
 
-    def _validate_table_schema(self, column_type_map):
-        # check for page_content and embedding type
-        # check whether metdata columns are present
-        pass
+        self._validate_table_schema(column_type_map, types)
+
+    def _get_column_type_map(self, database, table_name):
+        query = """
+            SELECT column_name, spanner_type, is_nullable
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = {table_name}
+        """.format(
+            table_name= "'" + table_name + "'")
+
+        with database.snapshot() as snapshot:
+            results = snapshot.execute_sql(query)
+
+        column_type_map = {}
+        for row in results:
+            column_type_map[row[0]] = row
+
+        return column_type_map
+
+    def _validate_table_schema(self, column_type_map, types):
+        if not all(key in column_type_map for key in self._columns_to_insert):
+            raise Exception("One or more columns from list not present in table: {} ", self._columns_to_insert)
+
+
+        content_column_type = column_type_map[self._content_column][1]
+        if not any(substring.lower() in content_column_type.lower() for substring in types[CONTENT_COLUMN_NAME]):
+             raise Exception("Content Column is not of correct type. Expected one of: {} but found: {}", types[CONTENT_COLUMN_NAME], content_column_type)
+
+        embedding_column_type = column_type_map[self._embedding_column][1]
+        if not any(substring.lower() in embedding_column_type.lower() for substring in types[EMBEDDING_COLUMN_NAME]):
+             raise Exception("Embedding Column is not of correct type. Expected one of: {} but found: {}", types[EMBEDDING_COLUMN_NAME], embedding_column_type)
+
+
+        if self._metadata_json_column is not None:
+            metadata_json_column_type = column_type_map[self._metadata_json_column][1]
+            allowed_types = types['metadata_json_column']
+            if not any(substring.lower() in metadata_json_column_type.lower() for substring in allowed_types):
+                raise Exception("Embedding Column is not of correct type. Expected one of: {} but found: {}", allowed_types, embedding_column_type)
+
+        for column_name, column_config in column_type_map.items():
+            if column_name not in self._columns_to_insert:
+                if "NO" == column_config[2].upper():
+                    raise Exception("Found not nullable constraint on column: {}.",column_name)
+
 
     def _select_relevance_score_fn(self) -> Callable[[float], float]:
             if self._query_parameters.distance_strategy == DistanceStrategy.COSINE:
@@ -381,10 +444,9 @@ class SpannerVectorStore(VectorStore):
             elif self._query_parameters.distance_strategy == DistanceStrategy.EUCLIDEIAN:
                 return self._euclidean_relevance_score_fn
             else:
-                raise ValueError(
-                    "Unknown distance strategy, must be cosine, max_inner_product,"
-                    " or euclidean"
-                )
+                raise Exception("Unknown distance strategy: {}, must be cosine or euclidean.", self._query_parameters.distance_strategy)
+
+
     def add_texts(
         self,
         texts: Iterable[str],
@@ -560,11 +622,11 @@ class SpannerVectorStore(VectorStore):
         Returns:
             List[Document]: List of documents most similar to the query.
         """
-        
+
         results, column_order_map = self._get_rows_by_similarity_search(embedding, k, pre_filter)
-        documents = self._get_documents_from_query_results(list(results), column_order_map)            
+        documents = self._get_documents_from_query_results(list(results), column_order_map)
         return documents
-    
+
 
     def _get_rows_by_similarity_search(self, embedding: List[float], k: int, pre_filter: Optional[str] = None, **kwargs: Any):
         staleness = self._query_parameters.staleness
@@ -632,7 +694,7 @@ class SpannerVectorStore(VectorStore):
             documents.append((doc, row[column_order_map[KNN_DISTANCE_SEARCH_QUERY_ALIAS]]))
 
         return documents
-    
+
 
     def similarity_search(
         self, query: str, k: int = 4, pre_filter: Optional[str] = None, **kwargs: Any
@@ -692,7 +754,7 @@ class SpannerVectorStore(VectorStore):
             embedding=embedding, k=k, pre_filter = pre_filter
         )
         return [doc for doc, _ in documents]
-    
+
 
     def max_marginal_relevance_search_with_score_by_vector(
         self,
@@ -724,8 +786,8 @@ class SpannerVectorStore(VectorStore):
         results, column_order_map = self._get_rows_by_similarity_search(embedding, fetch_k, pre_filter)
 
         embeddings = [result[column_order_map[self._embedding_column]] for result in results]
-        
-        
+
+
         mmr_selected = maximal_marginal_relevance(
             np.array([embedding], dtype=np.float32),
             embeddings,
@@ -734,7 +796,7 @@ class SpannerVectorStore(VectorStore):
         )
 
         search_results = [results[i] for i in mmr_selected]
-        documents_with_scores = self._get_documents_from_query_results(list(search_results), column_order_map)  
+        documents_with_scores = self._get_documents_from_query_results(list(search_results), column_order_map)
 
         return documents_with_scores
 
@@ -795,7 +857,7 @@ class SpannerVectorStore(VectorStore):
             embedding = self._embedding_service.embed_query(query)
             documents = self.max_marginal_relevance_search_by_vector(embedding, k, fetch_k, lambda_mult, pre_filter)
             return documents
-        
+
 
     @classmethod
     def from_documents(
