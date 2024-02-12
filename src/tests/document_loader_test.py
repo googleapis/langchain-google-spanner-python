@@ -25,7 +25,7 @@ project_id = os.environ["PROJECT_ID"]
 instance = os.environ["INSTANCE_ID"]
 google_database = os.environ["GOOGLE_DATABASE"]
 pg_database = os.environ["PG_DATABASE"]
-table_name = os.environ["TABLE_NAME"].replace("-","_")
+table_name = os.environ["TABLE_NAME"].replace("-", "_")
 
 OPERATION_TIMEOUT_SECONDS = 240
 
@@ -33,6 +33,7 @@ OPERATION_TIMEOUT_SECONDS = 240
 @pytest.fixture(scope="module")
 def client() -> Client:
     return Client(project=project_id)
+
 
 class TestSpannerDocumentLoaderGoogleSQL:
     @pytest.fixture(autouse=True, scope="class")
@@ -596,7 +597,6 @@ class TestSpannerDocumentSaver:
         print("table dropped")
         operation.result(OPERATION_TIMEOUT_SECONDS)
         yield client
-
 
     @pytest.fixture(name="pg_client")
     def setup_pg_client(self, client) -> Client:
