@@ -131,14 +131,14 @@ class GoogleSqlSemnatics(DialectSemantics):
             return "COSINE_DISTANCE"
 
         return "EUCLIDEAN_DISTANCE"
-    
+
     def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
         where_clause_condition = " AND ".join(["{} = @{}".format(column, column) for column in columns])
 
         param_types_dict =  {column: param_types.STRING for column in columns}
 
         return where_clause_condition, param_types_dict
-    
+
     def getDeleteDocumentsValueParameters(self, columns, values) -> Dict[str, Any]:
         return dict(zip(columns, values))
 
@@ -161,7 +161,7 @@ class PGSqlSemnatics(DialectSemantics):
         param_types_dict =  {value_placeholder: param_types.STRING for value_placeholder in value_placeholder_list}
 
         return where_clause_condition, param_types_dict
-    
+
     def getDeleteDocumentsValueParameters(self, columns, values) -> Dict[str, Any]:
         value_placeholder_list = ["p{}".format(index + 1) for index in range(len(columns))]
         return dict(zip(value_placeholder_list, values))
@@ -184,7 +184,10 @@ class QueryParameters:
         self,
         algorithm=NearestNeighborsAlgorithm.BRUTE_FORCE,
         distance_strategy=DistanceStrategy.EUCLIDEIAN,
-        staleness=0,
+        read_timestamp: Optional[datetime.datetime] = None,
+        min_read_timestamp: Optional[datetime.datetime] = None,
+        max_staleness: Optional[datetime.timedelta] = None,
+        exact_staleness: Optional[datetime.timedelta] = None,
     ):
         """
         Initialize query parameters.
@@ -196,7 +199,28 @@ class QueryParameters:
         """
         self.algorithm = algorithm
         self.distance_strategy = distance_strategy
-        self.staleness = staleness
+
+        key: Optional[str]
+        value: Any
+
+        self.staleness = None
+        key = None
+
+        if read_timestamp:
+            key = "read_timestamp"
+            value = read_timestamp
+        elif min_read_timestamp:
+            key = "min_read_timestamp"
+            value = min_read_timestamp
+        elif max_staleness:
+            key = "max_staleness"
+            value = max_staleness
+        elif exact_staleness:
+            key = "exact_staleness"
+            value = exact_staleness
+
+        if key is not None:
+            self.staleness = {key: value}
 
 
 class SpannerVectorStore(VectorStore):
@@ -733,7 +757,6 @@ class SpannerVectorStore(VectorStore):
         **kwargs: Any,
     ):
         staleness = self._query_parameters.staleness
-        staleness = datetime.timedelta(seconds=staleness)
 
         distance_function = self._dialect_semantics.getDistanceFunction(
             self._query_parameters.distance_strategy
@@ -767,7 +790,7 @@ class SpannerVectorStore(VectorStore):
             distance_alias=KNN_DISTANCE_SEARCH_QUERY_ALIAS,
         )
 
-        with self._database.snapshot(exact_staleness=staleness) as snapshot:
+        with self._database.snapshot(**staleness if staleness is not None else {}) as snapshot:
             results = snapshot.execute_sql(
                 sql=sql_query,
                 params={parameter[1]: embedding},
