@@ -46,6 +46,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from langchain_community.vectorstores.utils import maximal_marginal_relevance
+from google.cloud.spanner_v1 import Type
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,15 @@ class DialectSemantics(ABC):
         pass
 
 
+    @abstractmethod
+    def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
+        pass
+
+    @abstractmethod
+    def getDeleteDocumentsValueParameters(self, columns, values) -> Dict[str, Any]:
+        pass
+
+
 class GoogleSqlSemnatics(DialectSemantics):
     """
     Implementation of dialect semantics for Google SQL.
@@ -121,6 +131,16 @@ class GoogleSqlSemnatics(DialectSemantics):
             return "COSINE_DISTANCE"
 
         return "EUCLIDEAN_DISTANCE"
+    
+    def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
+        where_clause_condition = " AND ".join(["{} = @{}".format(column, column) for column in columns])
+
+        param_types_dict =  {column: param_types.STRING for column in columns}
+
+        return where_clause_condition, param_types_dict
+    
+    def getDeleteDocumentsValueParameters(self, columns, values) -> Dict[str, Any]:
+        return dict(zip(columns, values))
 
 
 class PGSqlSemnatics(DialectSemantics):
@@ -132,6 +152,20 @@ class PGSqlSemnatics(DialectSemantics):
         if distance_strategy == DistanceStrategy.COSINE:
             return "spanner.cosine_distance"
         return "spanner.euclidean_distance"
+
+    def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
+        where_clause_condition = " AND ".join(["{} = ${}".format(column, index + 1) for index, column in enumerate(columns)])
+
+        value_placeholder_list = ["p{}".format(index + 1) for index in range(len(columns))]
+
+        param_types_dict =  {value_placeholder: param_types.STRING for value_placeholder in value_placeholder_list}
+
+        return where_clause_condition, param_types_dict
+    
+    def getDeleteDocumentsValueParameters(self, columns, values) -> Dict[str, Any]:
+        value_placeholder_list = ["p{}".format(index + 1) for index in range(len(columns))]
+        return dict(zip(value_placeholder_list, values))
+
 
 
 class QueryParameters:
@@ -638,33 +672,27 @@ class SpannerVectorStore(VectorStore):
         def delete_records(transaction):
             # ToDo: Debug why not working
             base_delete_statement = "DELETE FROM {} WHERE ".format(self._table_name)
-            column_expression = "(" + ",".join(columns) + ") = " + "$1"
 
-            record_type = param_types.Struct(
-                [
-                    param_types.StructField(column, param_types.STRING)
-                    for column in columns
-                ]
-            )
+            where_clause, param_types_map = self._dialect_semantics.getDeleteDocumentsParameters(columns)
 
             # Concatenate the conditions with the base DELETE statement
-            sql_delete = base_delete_statement + column_expression
+            sql_delete = base_delete_statement + where_clause
 
             # Iterate over the list of lists of values
+            delete_row_count = 0
             for value_tuple in values:
                 # Construct the params dictionary
-                values_tuple_param = tuple(value_tuple)
+                values_tuple_param = self._dialect_semantics.getDeleteDocumentsValueParameters(columns, value_tuple)
 
-                print("Executing SQL:", sql_delete)
-                print("Params:", values_tuple_param)
-
-                results = transaction.execute_update(
+                count = transaction.execute_update(
                     dml=sql_delete,
-                    params={"p1": values_tuple_param},
-                    param_types={"p1": record_type},
+                    params=values_tuple_param,
+                    param_types=param_types_map,
                 )
 
-                print(results)
+                delete_row_count = delete_row_count + count
+
+            print (delete_row_count)
 
         self._database.run_in_transaction(delete_records)
 
