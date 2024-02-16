@@ -14,7 +14,8 @@
 
 import datetime
 import json
-from typing import Dict, Iterator, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 from google.cloud.spanner import Client, KeySet  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect  # type: ignore
@@ -29,6 +30,13 @@ CONTENT_COL_NAME = "page_content"
 METADATA_COL_NAME = "langchain_metadata"
 
 
+@dataclass
+class Column:
+    name: str
+    data_type: str
+    nullable: bool = True
+
+
 def _load_row_to_doc(
     format: str,
     content_columns: List[str],
@@ -36,20 +44,27 @@ def _load_row_to_doc(
     metadata_json_column: str,
     row: Dict,
 ) -> Document:
-    include_headers = ["JSON", "YAML"]
-    if format in include_headers:
-        page_content = " ".join(
+    page_content = ""
+    if format == "text":
+        page_content = " ".join(str(row[c]) for c in content_columns if c in row)
+    elif format == "YAML":
+        page_content = "\n".join(
             f"{c}: {str(row[c])}" for c in content_columns if c in row
         )
-    else:
-        page_content = " ".join(str(row[c]) for c in content_columns if c in row)
-
+    elif format == "JSON":
+        j = {}
+        for c in content_columns:
+            if c in row:
+                j[c] = row[c]
+        page_content = json.dumps(j)
+    elif format == "CSV":
+        page_content = ", ".join(str(row[c]) for c in content_columns if c in row)
     if not page_content:
         raise Exception("column page_content doesn't exist.")
 
     metadata: Dict[str, Any] = {}
     if metadata_json_column in metadata_columns and row.get(metadata_json_column):
-        metadata = {**metadata, **row[metadata_json_column]}
+        metadata = row[metadata_json_column]
 
     for c in metadata_columns:
         if c in row and c != metadata_json_column:
@@ -58,9 +73,24 @@ def _load_row_to_doc(
     return Document(page_content=page_content, metadata=metadata)
 
 
-def _load_doc_to_row(table_fields: List[str], doc: Document, metadata_json_column: str):
+def _load_doc_to_row(
+    table_fields: List[str],
+    doc: Document,
+    metadata_json_column: str,
+    parse_json: bool = True,
+):
+    """
+    Load document to row.
+
+    Args:
+        table_fields: Spanner table fields names.
+        doc: Document that is used.
+        metadata_json_column: Name of the special JSON column.
+        parse_json: Parse json column to string or leave it as JSON object. String format is needed to for Spanner inserts.
+                    JSON object is used to compare with Spanner reads.
+    """
     doc_metadata = doc.metadata.copy()
-    row = (doc.page_content,)
+    row = [doc.page_content]
     # store metadata
     for col in table_fields:
         if (
@@ -68,7 +98,7 @@ def _load_doc_to_row(table_fields: List[str], doc: Document, metadata_json_colum
             and col != metadata_json_column
             and col in doc_metadata
         ):
-            row = (*row, doc_metadata[col])  # type: ignore
+            row.append(doc_metadata[col])
             del doc_metadata[col]
     if metadata_json_column in table_fields:
         metadata_json = {}
@@ -76,8 +106,9 @@ def _load_doc_to_row(table_fields: List[str], doc: Document, metadata_json_colum
             metadata_json = doc_metadata[metadata_json_column]
             del doc_metadata[metadata_json_column]
         metadata_json = {**metadata_json, **doc_metadata}
-        row += (json.dumps(metadata_json),)  # type: ignore
-    return row
+        j = json.dumps(metadata_json) if parse_json else metadata_json
+        row.append(j)
+    return tuple(row)
 
 
 def _batch(datas: List[Any], size: int = 1) -> Iterator[List[Any]]:
@@ -91,22 +122,22 @@ class SpannerLoader(BaseLoader):
 
     def __init__(
         self,
-        instance: str,
-        database: str,
+        instance_id: str,
+        database_id: str,
         query: str,
         client: Client = Client(),
         content_columns: List[str] = [],
         metadata_columns: List[str] = [],
         format: str = "text",
         databoost: bool = False,
-        metadata_json_column: str = "",
-        staleness: float = 0.0,
+        metadata_json_column: str = METADATA_COL_NAME,
+        staleness: Union[float, datetime.datetime] = 15.0,
     ):
         """Initialize Spanner document loader.
 
         Args:
-            instance: The Spanner instance to load data from.
-            database: The Spanner database to load data from.
+            instance_id: The Spanner instance to load data from.
+            database_id: The Spanner database to load data from.
             query: A GoogleSQL or PostgreSQL query. Users must match dialect to their database.
             client: The connection object to use. This can be used to customize project id and credentials.
             content_columns: The list of column(s) or field(s) to use for a Document's page content.
@@ -116,10 +147,10 @@ class SpannerLoader(BaseLoader):
                     Format included: 'text', 'JSON', 'YAML', 'CSV'.
             databoost: Use data boost on read. Note: needs extra IAM permissions and higher cost.
             metadata_json_column: The name of the JSON column to use as the metadata's base dictionary.
-            staleness: The time bound for stale read.
+            staleness: The time bound for stale read. Takes either a datetime or float.
         """
-        self.instance = instance
-        self.database = database
+        self.instance_id = instance_id
+        self.database_id = database_id
         self.query = query
         self.content_columns = content_columns
         self.metadata_columns = metadata_columns
@@ -131,9 +162,13 @@ class SpannerLoader(BaseLoader):
         self.databoost = databoost
         self.client = client
         self.staleness = staleness
-        if not self.client.instance(self.instance).exists():
+        if not self.client.instance(self.instance_id).exists():
             raise Exception("Instance doesn't exist.")
-        if not self.client.instance(self.instance).database(self.database).exists():
+        if (
+            not self.client.instance(self.instance_id)
+            .database(self.database_id)
+            .exists()
+        ):
             raise Exception("Database doesn't exist.")
 
     def load(self) -> List[Document]:
@@ -155,11 +190,19 @@ class SpannerLoader(BaseLoader):
             (Iterator[langchain_core.documents.Document]): a list of Documents with metadata
             from specific columns.
         """
-        instance = self.client.instance(self.instance)
-        db = instance.database(self.database)
-        duration = datetime.timedelta(seconds=self.staleness)
-        snapshot = db.batch_snapshot(exact_staleness=duration)
-        keyset = KeySet(all_=True)
+        instance = self.client.instance(self.instance_id)
+        db = instance.database(self.database_id)
+        timestamp = (
+            self.staleness.replace(tzinfo=datetime.timezone.utc)
+            if type(self.staleness) is datetime.datetime
+            else None
+        )
+        duration = (
+            datetime.timedelta(seconds=self.staleness)
+            if type(self.staleness) is float
+            else None
+        )
+        snapshot = db.batch_snapshot(exact_staleness=duration, read_timestamp=timestamp)
         partitions = snapshot.generate_query_batches(
             sql=self.query, data_boost_enabled=self.databoost
         )
@@ -173,13 +216,12 @@ class SpannerLoader(BaseLoader):
             metadata_columns = self.metadata_columns or [
                 col for col in column_names if col not in content_columns
             ]
-            metadata_json_column = self.metadata_json_column or METADATA_COL_NAME
             for row in results:
                 yield _load_row_to_doc(
                     self.format,
                     content_columns,
                     metadata_columns,
-                    metadata_json_column,
+                    self.metadata_json_column,
                     row,
                 )
 
@@ -189,19 +231,19 @@ class SpannerDocumentSaver:
 
     def __init__(
         self,
-        instance: str,
-        database: str,
+        instance_id: str,
+        database_id: str,
         table_name: str,
         client: Client = Client(),
         content_column: Optional[str] = "",
         metadata_columns: Optional[List[str]] = [],
-        metadata_json_column: Optional[str] = "",
+        metadata_json_column: Optional[str] = METADATA_COL_NAME,
     ):
         """Initialize Spanner document saver.
 
         Args:
-            instance: The Spanner instance to load data to.
-            database: The Spanner database to load data to.
+            instance_id: The Spanner instance to load data to.
+            database_id: The Spanner database to load data to.
             table_name: The table name to load data to.
             client: The connection object to use. This can be used to customized project id and credentials.
             content_column: Optional. The name of the content column. Defaulted to the first column.
@@ -210,34 +252,34 @@ class SpannerDocumentSaver:
             store_metadata: If true, extra metadata will be stored in the "langchain_metadata" column.
             metadata_json_column: Optional. The name of the special JSON column. Defaulted to use "langchain_metadata".
         """
-        self.instance = instance
-        self.database = database
+        self.instance_id = instance_id
+        self.database_id = database_id
         self.table_name = table_name
         self.content_column = content_column
         self.metadata_columns = metadata_columns
-        self.metadata_json_column = metadata_json_column or METADATA_COL_NAME
+        self.metadata_json_column = metadata_json_column
         self.client = client
-        spanner_instance = self.client.instance(instance)
-        if not spanner_instance.exists():
+        instance = self.client.instance(instance_id)
+        if not instance.exists():
             raise Exception("Instance doesn't exist.")
-        spanner_database = spanner_instance.database(database)
-        if not spanner_database.exists():
+        database = instance.database(database_id)
+        if not database.exists():
             raise Exception("Database doesn't exist.")
-        spanner_database.reload()
-        self.dialect = spanner_database.database_dialect
-        spanner_table = spanner_database.table(table_name)
-        if not spanner_table.exists():
+        database.reload()
+        self.dialect = database.database_dialect
+        table = database.table(table_name)
+        if not table.exists():
             raise Exception(
                 "Table doesn't exist. Create table with SpannerDocumentSaver.init_document_table function."
             )
         self._table_fields = [
-            n.name for n in spanner_table.schema if n.name != self.metadata_json_column
+            n.name for n in table.schema if n.name != self.metadata_json_column
         ]
         self._table_fields.append(self.metadata_json_column)
 
     def add_documents(self, documents: List[Document]):
         """Add documents to the Spanner table."""
-        db = self.client.instance(self.instance).database(self.database)
+        db = self.client.instance(self.instance_id).database(self.database_id)
         values = [
             _load_doc_to_row(self._table_fields, doc, self.metadata_json_column)
             for doc in documents
@@ -253,31 +295,48 @@ class SpannerDocumentSaver:
 
     def delete(self, documents: List[Document]):
         """Delete documents from the table."""
-        database = self.client.instance(self.instance).database(self.database)
-        keys = [[doc.page_content] for doc in documents]
-        for keys_batch in _batch(keys, MUTATION_BATCH_SIZE):
-            docs_to_delete = KeySet(keys=keys_batch)
+        database = self.client.instance(self.instance_id).database(self.database_id)
+        # load documents to row
+        docs = [
+            _load_doc_to_row(self._table_fields, doc, self.metadata_json_column, False)
+            for doc in documents
+        ]
+        keys = [[doc[0]] for doc in docs]
+        docs_keys = KeySet(keys=keys)
+        snapshot = database.batch_snapshot()
+        partitions = snapshot.generate_read_batches(
+            table=self.table_name,
+            columns=tuple(self._table_fields),
+            keyset=docs_keys,
+            partition_size_bytes=5000000,
+        )
+        for partition in partitions:
+            keys_to_delete = []
+            for row in snapshot.process_read_batch(partition):
+                # compare whole document
+                if tuple(row) in docs:
+                    keys_to_delete.append([row[0]])
             with database.batch() as batch:
-                # Delete based on comparing the whole document instead of just the key
+                docs_to_delete = KeySet(keys=keys_to_delete)
                 batch.delete(self.table_name, docs_to_delete)
 
     @staticmethod
     def init_document_table(
-        instance: str,
-        database: str,
+        instance_id: str,
+        database_id: str,
         table_name: str,
-        content_column: str = "",
-        metadata_columns: List[Any] = [],
+        content_column: str = CONTENT_COL_NAME,
+        metadata_columns: List[Column] = [],
         primary_key: str = "",
         store_metadata: bool = True,
-        metadata_json_column: Optional[str] = "",
+        metadata_json_column: Optional[str] = None,
     ):
         """
         Create a new table to store docs with a custom schema.
 
         Args:
-            instance_name: The Spanner instance to load data to.
-            database_name: The Spanner database to load data to.
+            instance_id: The Spanner instance to load data to.
+            database_id: The Spanner database to load data to.
             table_name: The table name to load data to.
             content_column: The name of the content column.
             metadata_columns: The metadata columns for custom schema.
@@ -286,23 +345,22 @@ class SpannerDocumentSaver:
                             Defaulted to true.
             metadata_json_column: Optional. The name of the special JSON column. Defaulted to use "langchain_metadata".
         """
-        content_column = content_column or CONTENT_COL_NAME
         primary_key = primary_key or content_column
         metadata_json_column = (
             (metadata_json_column or METADATA_COL_NAME) if store_metadata else None
         )
         client = Client()
-        spanner_instance = client.instance(instance)
-        if not spanner_instance.exists():
+        instance = client.instance(instance_id)
+        if not instance.exists():
             raise Exception("Instance doesn't exist.")
-        spanner_database = spanner_instance.database(database)
-        if not spanner_database.exists():
+        database = instance.database(database_id)
+        if not database.exists():
             raise Exception("Database doesn't exist.")
         # create table with custom schema
         SpannerDocumentSaver.create_table(
             client,
-            instance,
-            database,
+            instance_id,
+            database_id,
             table_name,
             primary_key,
             metadata_json_column,
@@ -313,36 +371,36 @@ class SpannerDocumentSaver:
     @staticmethod
     def create_table(
         client: Client,
-        instance: str,
-        database: str,
+        instance_id: str,
+        database_id: str,
         table_name: str,
         primary_key: str,
         metadata_json_column: Optional[str],
         content_column: str,
-        metadata_columns: List[Any],
+        metadata_columns: List[Column],
     ):
         """Create a new table in Spanner database."""
-        spanner_database = client.instance(instance).database(database)
-        spanner_database.reload()
-        dialect = spanner_database.database_dialect
+        database = client.instance(instance_id).database(database_id)
+        database.reload()
+        dialect = database.database_dialect
 
         ddl = f"CREATE TABLE {table_name} ("
         if dialect == DatabaseDialect.POSTGRESQL:
             ddl += f"{content_column} VARCHAR(1024) NOT NULL,"
             for col in metadata_columns:
-                null_string = "NOT NULL" if col[2] else ""
-                ddl += f"{col[0]} {col[1]} {null_string},"
+                null_string = " NOT NULL" if col.nullable else ""
+                ddl += f"{col.name} {col.data_type}{null_string},"
             if metadata_json_column:
                 ddl += f"{metadata_json_column} JSONb NOT NULL,"
             ddl += f"PRIMARY KEY ({primary_key}));"
         else:
             ddl += f"{content_column} STRING(1024) NOT NULL,"
             for col in metadata_columns:
-                null_string = "NOT NULL" if col[2] else ""
-                ddl += f"{col[0]} {col[1]} {null_string},"
+                null_string = " NOT NULL" if col.nullable else ""
+                ddl += f"{col.name} {col.data_type}{null_string},"
             if metadata_json_column:
                 ddl += f"{metadata_json_column} JSON NOT NULL,"
             ddl += f") PRIMARY KEY ({primary_key})"
 
-        operation = spanner_database.update_ddl([ddl])
+        operation = database.update_ddl([ddl])
         operation.result(OPERATION_TIMEOUT_SECONDS)

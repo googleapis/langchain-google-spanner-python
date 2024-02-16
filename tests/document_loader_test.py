@@ -22,7 +22,7 @@ from langchain_core.documents import Document
 from langchain_google_spanner.document_loader import SpannerDocumentSaver, SpannerLoader
 
 project_id = os.environ["PROJECT_ID"]
-instance = os.environ["INSTANCE_ID"]
+instance_id = os.environ["INSTANCE_ID"]
 google_database = os.environ["GOOGLE_DATABASE"]
 pg_database = os.environ["PG_DATABASE"]
 table_name = os.environ["TABLE_NAME"].replace("-", "_")
@@ -38,11 +38,11 @@ def client() -> Client:
 class TestSpannerDocumentLoaderGoogleSQL:
     @pytest.fixture(autouse=True, scope="class")
     def setup_database(self, client):
-        database = client.instance(instance).database(google_database)
+        database = client.instance(instance_id).database(google_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         operation.result(OPERATION_TIMEOUT_SECONDS)
         SpannerDocumentSaver.init_document_table(
-            instance,
+            instance_id,
             google_database,
             table_name,
             content_column="product_id",
@@ -54,7 +54,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
         )
 
         saver = SpannerDocumentSaver(
-            instance,
+            instance_id,
             google_database,
             table_name,
             client,
@@ -110,19 +110,19 @@ class TestSpannerDocumentLoaderGoogleSQL:
         ],
     )
     def test_loader_with_query(self, client, query, expected):
-        loader = SpannerLoader(instance, google_database, query, client=client)
+        loader = SpannerLoader(instance_id, google_database, query, client=client)
         docs = loader.load()
         assert docs == expected
 
     def test_loader_missing_table_and_query(self):
         with pytest.raises(Exception):
-            SpannerLoader(instance, google_database)
+            SpannerLoader(instance_id, google_database)
 
     # Custom CUJs
     def test_loader_custom_content(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             google_database,
             query,
             client=client,
@@ -144,7 +144,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
     def test_loader_custom_metadata(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             google_database,
             query,
             client=client,
@@ -161,7 +161,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
     def test_loader_custom_content_and_metadata(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             google_database,
             query,
             client=client,
@@ -179,7 +179,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
     def test_loader_custom_format_json(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             google_database,
             query,
             client=client,
@@ -202,7 +202,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
     def test_loader_custom_format_yaml(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance, google_database, query, client=client, format="YAML"
+            instance_id, google_database, query, client=client, format="YAML"
         )
         docs = loader.load()
         assert docs == [
@@ -221,7 +221,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
     def test_loader_custom_format_csv(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance, google_database, query, client=client, format="CSV"
+            instance_id, google_database, query, client=client, format="CSV"
         )
         docs = loader.load()
         assert docs == [
@@ -241,7 +241,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
         query = f"SELECT * FROM {table_name}"
         with pytest.raises(Exception):
             SpannerLoader(
-                instance,
+                instance_id,
                 google_database,
                 query,
                 client,
@@ -249,11 +249,11 @@ class TestSpannerDocumentLoaderGoogleSQL:
             )
 
     def test_loader_custom_json_metadata(self, client):
-        database = client.instance(instance).database(google_database)
+        database = client.instance(instance_id).database(google_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         operation.result(OPERATION_TIMEOUT_SECONDS)
         SpannerDocumentSaver.init_document_table(
-            instance,
+            instance_id,
             google_database,
             table_name,
             content_column="product_id",
@@ -266,7 +266,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
         )
 
         saver = SpannerDocumentSaver(
-            instance,
+            instance_id,
             google_database,
             table_name,
             client,
@@ -291,7 +291,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
         saver.add_documents(test_documents)
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             google_database,
             query,
             client=client,
@@ -315,11 +315,11 @@ class TestSpannerDocumentLoaderGoogleSQL:
 class TestSpannerDocumentLoaderPostgreSQL:
     @pytest.fixture(autouse=True, scope="class")
     def setup_database(self, client):
-        database = client.instance(instance).database(pg_database)
+        database = client.instance(instance_id).database(pg_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         operation.result(OPERATION_TIMEOUT_SECONDS)
         SpannerDocumentSaver.init_document_table(
-            instance,
+            instance_id,
             pg_database,
             table_name,
             content_column="product_id",
@@ -331,7 +331,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
         )
 
         saver = SpannerDocumentSaver(
-            instance,
+            instance_id,
             pg_database,
             table_name,
             client,
@@ -387,19 +387,19 @@ class TestSpannerDocumentLoaderPostgreSQL:
         ],
     )
     def test_loader_with_query(self, client, query, expected):
-        loader = SpannerLoader(instance, pg_database, query, client=client)
+        loader = SpannerLoader(instance_id, pg_database, query, client=client)
         docs = loader.load()
         assert docs == expected
 
     def test_loader_missing_table_and_query(self):
         with pytest.raises(Exception):
-            SpannerLoader(instance, pg_database)
+            SpannerLoader(instance_id, pg_database)
 
     # Custom CUJs
     def test_loader_custom_content(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             pg_database,
             query,
             client=client,
@@ -421,7 +421,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
     def test_loader_custom_metadata(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             pg_database,
             query,
             client=client,
@@ -438,7 +438,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
     def test_loader_custom_content_and_metadata(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             pg_database,
             query,
             client=client,
@@ -456,7 +456,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
     def test_loader_custom_format_json(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             pg_database,
             query,
             client=client,
@@ -479,7 +479,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
     def test_loader_custom_format_yaml(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance, pg_database, query, client=client, format="YAML"
+            instance_id, pg_database, query, client=client, format="YAML"
         )
         docs = loader.load()
         assert docs == [
@@ -498,7 +498,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
     def test_loader_custom_format_csv(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance, pg_database, query, client=client, format="CSV"
+            instance_id, pg_database, query, client=client, format="CSV"
         )
         docs = loader.load()
         assert docs == [
@@ -518,7 +518,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
         query = f"SELECT * FROM {table_name}"
         with pytest.raises(Exception):
             SpannerLoader(
-                instance,
+                instance_id,
                 pg_database,
                 query,
                 client,
@@ -526,11 +526,11 @@ class TestSpannerDocumentLoaderPostgreSQL:
             )
 
     def test_loader_custom_json_metadata(self, client):
-        database = client.instance(instance).database(pg_database)
+        database = client.instance(instance_id).database(pg_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         operation.result(OPERATION_TIMEOUT_SECONDS)
         SpannerDocumentSaver.init_document_table(
-            instance,
+            instance_id,
             pg_database,
             table_name,
             content_column="product_id",
@@ -543,7 +543,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
         )
 
         saver = SpannerDocumentSaver(
-            instance,
+            instance_id,
             pg_database,
             table_name,
             client,
@@ -568,7 +568,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
         saver.add_documents(test_documents)
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance,
+            instance_id,
             pg_database,
             query,
             client=client,
@@ -592,7 +592,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
 class TestSpannerDocumentSaver:
     @pytest.fixture(name="google_client")
     def setup_google_client(self, client) -> Client:
-        database = client.instance(instance).database(google_database)
+        database = client.instance(instance_id).database(google_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         print("table dropped")
         operation.result(OPERATION_TIMEOUT_SECONDS)
@@ -600,20 +600,20 @@ class TestSpannerDocumentSaver:
 
     @pytest.fixture(name="pg_client")
     def setup_pg_client(self, client) -> Client:
-        database = client.instance(instance).database(pg_database)
+        database = client.instance(instance_id).database(pg_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         operation.result(OPERATION_TIMEOUT_SECONDS)
         yield client
 
     def test_saver_google_sql(self, google_client):
-        SpannerDocumentSaver.init_document_table(instance, google_database, table_name)
+        SpannerDocumentSaver.init_document_table(instance_id, google_database, table_name)
         saver = SpannerDocumentSaver(
-            instance, google_database, table_name, google_client
+            instance_id, google_database, table_name, google_client
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             client=google_client,
-            instance=instance,
+            instance=instance_id,
             database=google_database,
             query=query,
         )
@@ -627,11 +627,11 @@ class TestSpannerDocumentSaver:
         assert saver._table_fields == ["page_content", "langchain_metadata"]
 
     def test_saver_pg(self, pg_client):
-        SpannerDocumentSaver.init_document_table(instance, pg_database, table_name)
-        saver = SpannerDocumentSaver(instance, pg_database, table_name, pg_client)
+        SpannerDocumentSaver.init_document_table(instance_id, pg_database, table_name)
+        saver = SpannerDocumentSaver(instance_id, pg_database, table_name, pg_client)
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            client=pg_client, instance=instance, database=pg_database, query=query
+            client=pg_client, instance=instance_id, database=pg_database, query=query
         )
         expected_docs = [
             Document(page_content="Hello, World!", metadata={"source": "my-computer"}),
@@ -644,7 +644,7 @@ class TestSpannerDocumentSaver:
 
     def test_saver_google_sql_with_custom_schema(self, google_client):
         SpannerDocumentSaver.init_document_table(
-            instance,
+            instance_id,
             google_database,
             table_name,
             content_column="my_page_content",
@@ -656,12 +656,12 @@ class TestSpannerDocumentSaver:
             store_metadata=True,
         )
         saver = SpannerDocumentSaver(
-            instance, google_database, table_name, google_client
+            instance_id, google_database, table_name, google_client
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             client=google_client,
-            instance=instance,
+            instance=instance_id,
             database=google_database,
             query=query,
         )
@@ -686,7 +686,7 @@ class TestSpannerDocumentSaver:
 
     def test_saver_pg_with_custom_schema(self, pg_client):
         SpannerDocumentSaver.init_document_table(
-            instance,
+            instance_id,
             pg_database,
             table_name,
             content_column="my_page_content",
@@ -697,10 +697,10 @@ class TestSpannerDocumentSaver:
             primary_key="my_page_content",
             store_metadata=True,
         )
-        saver = SpannerDocumentSaver(instance, pg_database, table_name, pg_client)
+        saver = SpannerDocumentSaver(instance_id, pg_database, table_name, pg_client)
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            client=pg_client, instance=instance, database=pg_database, query=query
+            client=pg_client, instance=instance_id, database=pg_database, query=query
         )
         expected_docs = [
             Document(
@@ -722,14 +722,14 @@ class TestSpannerDocumentSaver:
         ]
 
     def test_delete(self, google_client):
-        SpannerDocumentSaver.init_document_table(instance, google_database, table_name)
+        SpannerDocumentSaver.init_document_table(instance_id, google_database, table_name)
         saver = SpannerDocumentSaver(
-            instance, google_database, table_name, google_client
+            instance_id, google_database, table_name, google_client
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             client=google_client,
-            instance=instance,
+            instance=instance_id,
             database=google_database,
             query=query,
         )
@@ -745,9 +745,9 @@ class TestSpannerDocumentSaver:
         assert loader.load() == [expected_docs[1]]
 
     def test_saver_with_bad_docs(self, google_client):
-        SpannerDocumentSaver.init_document_table(instance, google_database, table_name)
+        SpannerDocumentSaver.init_document_table(instance_id, google_database, table_name)
         saver = SpannerDocumentSaver(
-            instance, google_database, table_name, google_client
+            instance_id, google_database, table_name, google_client
         )
         with pytest.raises(Exception):
             saver.add_documents([1, 2, 3])
