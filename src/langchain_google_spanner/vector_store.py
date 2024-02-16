@@ -87,7 +87,7 @@ class TableColumn:
 class SecondaryIndex:
     index_name: str
     columns: list[str]
-    storing_columns: list[str]
+    storing_columns: Optional[list[str]] = None
 
     def __post_init__(self):
         # Check if column_name is None after initialization
@@ -266,7 +266,7 @@ class SpannerVectorStore(VectorStore):
         metadata_columns: Optional[List[TableColumn]] = None,
         primary_key: Optional[str] = None,
         vector_size: Optional[int] = None,
-        secondary_index: Optional[List[SecondaryIndex]] = None,
+        secondary_indexes: Optional[List[SecondaryIndex]] = None,
     ) -> bool:
         """
         Initialize the vector store new table in Google Cloud Spanner.
@@ -303,9 +303,10 @@ class SpannerVectorStore(VectorStore):
             embedding_column,
             metadata_columns,
             primary_key,
+            secondary_indexes
         )
 
-        operation = database.update_ddl([ddl])
+        operation = database.update_ddl(ddl)
 
         print("Waiting for operation to complete...")
         operation.result(100000)
@@ -321,6 +322,7 @@ class SpannerVectorStore(VectorStore):
         embedding_column,
         column_configs,
         primary_key,
+        secondary_indexes: Optional[List[SecondaryIndex]] = None,
     ):
         """
         Generate SQL for creating the vector store table.
@@ -336,7 +338,7 @@ class SpannerVectorStore(VectorStore):
         Returns:
         - str: The generated SQL.
         """
-        sql = f"CREATE TABLE {table_name} (\n"
+        create_table_statement = f"CREATE TABLE {table_name} (\n"
 
         if not isinstance(id_column, TableColumn):
             if dialect == DatabaseDialect.POSTGRESQL:
@@ -380,15 +382,39 @@ class SpannerVectorStore(VectorStore):
 
                 # Add a comma and a newline for the next column
                 column_sql += ",\n"
-                sql += column_sql
+                create_table_statement += column_sql
 
         # Remove the last comma and newline, add closing parenthesis
         if dialect == DatabaseDialect.POSTGRESQL:
-            sql += "  PRIMARY KEY(" + primary_key + ")\n)"
+            create_table_statement += "  PRIMARY KEY(" + primary_key + ")\n)"
         else:
-            sql = sql.rstrip(",\n") + "\n) PRIMARY KEY(" + primary_key + ")"
+            create_table_statement = create_table_statement.rstrip(",\n") + "\n) PRIMARY KEY(" + primary_key + ")"
 
-        return sql
+
+        secondary_index_ddl_statements = []
+
+        if secondary_indexes is not None:
+            for secondary_index in secondary_indexes:
+                statement = f"CREATE INDEX {secondary_index.index_name} ON {table_name}("
+                statement =  statement + ",".join(secondary_index.columns) + ")  "
+
+                if dialect == DatabaseDialect.POSTGRESQL:
+                    statement = statement + "INCLUDE ("
+                else:
+                     statement = statement + "STORING ("
+
+                if secondary_index.storing_columns is None:
+                    secondary_index.storing_columns = [embedding_column.name]
+                elif embedding_column not in secondary_index.storing_columns:
+                    secondary_index.storing_columns.append(embedding_column.name)
+
+                statement =  statement + ",".join(secondary_index.storing_columns) + ")"
+
+                secondary_index_ddl_statements.append(statement)
+
+
+        return [create_table_statement] + secondary_index_ddl_statements
+
 
     def __init__(
         self,
