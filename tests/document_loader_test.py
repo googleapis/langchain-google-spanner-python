@@ -19,7 +19,11 @@ import pytest
 from google.cloud.spanner import Client, KeySet  # type: ignore
 from langchain_core.documents import Document
 
-from langchain_google_spanner.document_loader import SpannerDocumentSaver, SpannerLoader
+from langchain_google_spanner.document_loader import (
+    Column,
+    SpannerDocumentSaver,
+    SpannerLoader,
+)
 
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
@@ -47,9 +51,9 @@ class TestSpannerDocumentLoaderGoogleSQL:
             table_name,
             content_column="product_id",
             metadata_columns=[
-                ("product_name", "STRING(1024)", True),
-                ("description", "STRING(1024)", False),
-                ("price", "INT64", False),
+                Column("product_name", "STRING(1024)", True),
+                Column("description", "STRING(1024)", False),
+                Column("price", "INT64", False),
             ],
         )
 
@@ -189,7 +193,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
         docs = loader.load()
         assert docs == [
             Document(
-                page_content="product_id: 1 product_name: cards",
+                page_content='{"product_id": "1", "product_name": "cards"}',
                 metadata={
                     "extra_metadata": "foobar",
                     "foo": "bar",
@@ -202,18 +206,22 @@ class TestSpannerDocumentLoaderGoogleSQL:
     def test_loader_custom_format_yaml(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance_id, google_database, query, client=client, format="YAML"
+            instance_id,
+            google_database,
+            query,
+            client=client,
+            content_columns=["product_id", "product_name"],
+            format="YAML",
         )
         docs = loader.load()
         assert docs == [
             Document(
-                page_content="product_id: 1",
+                page_content="product_id: 1\nproduct_name: cards",
                 metadata={
-                    "product_name": "cards",
+                    "extra_metadata": "foobar",
+                    "foo": "bar",
                     "description": "playing cards are cool",
                     "price": 10,
-                    "foo": "bar",
-                    "extra_metadata": "foobar",
                 },
             )
         ]
@@ -221,18 +229,22 @@ class TestSpannerDocumentLoaderGoogleSQL:
     def test_loader_custom_format_csv(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance_id, google_database, query, client=client, format="CSV"
+            instance_id,
+            google_database,
+            query,
+            client=client,
+            content_columns=["product_id", "product_name"],
+            format="CSV",
         )
         docs = loader.load()
         assert docs == [
             Document(
-                page_content="1",
+                page_content="1, cards",
                 metadata={
-                    "product_name": "cards",
+                    "extra_metadata": "foobar",
+                    "foo": "bar",
                     "description": "playing cards are cool",
                     "price": 10,
-                    "foo": "bar",
-                    "extra_metadata": "foobar",
                 },
             )
         ]
@@ -258,9 +270,9 @@ class TestSpannerDocumentLoaderGoogleSQL:
             table_name,
             content_column="product_id",
             metadata_columns=[
-                ("product_name", "STRING(1024)", True),
-                ("description", "STRING(1024)", False),
-                ("price", "INT64", False),
+                Column("product_name", "STRING(1024)", True),
+                Column("description", "STRING(1024)", False),
+                Column("price", "INT64", False),
             ],
             metadata_json_column="my_metadata",
         )
@@ -324,9 +336,9 @@ class TestSpannerDocumentLoaderPostgreSQL:
             table_name,
             content_column="product_id",
             metadata_columns=[
-                ("product_name", "VARCHAR(1024)", True),
-                ("description", "VARCHAR(1024)", False),
-                ("price", "INT", False),
+                Column("product_name", "VARCHAR(1024)", True),
+                Column("description", "VARCHAR(1024)", False),
+                Column("price", "INT", False),
             ],
         )
 
@@ -466,7 +478,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
         docs = loader.load()
         assert docs == [
             Document(
-                page_content="product_id: 1 product_name: cards",
+                page_content='{"product_id": "1", "product_name": "cards"}',
                 metadata={
                     "extra_metadata": "foobar",
                     "foo": "bar",
@@ -479,18 +491,22 @@ class TestSpannerDocumentLoaderPostgreSQL:
     def test_loader_custom_format_yaml(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance_id, pg_database, query, client=client, format="YAML"
+            instance_id,
+            pg_database,
+            query,
+            client=client,
+            content_columns=["product_id", "product_name"],
+            format="YAML",
         )
         docs = loader.load()
         assert docs == [
             Document(
-                page_content="product_id: 1",
+                page_content="product_id: 1\nproduct_name: cards",
                 metadata={
-                    "product_name": "cards",
+                    "extra_metadata": "foobar",
+                    "foo": "bar",
                     "description": "playing cards are cool",
                     "price": 10,
-                    "foo": "bar",
-                    "extra_metadata": "foobar",
                 },
             )
         ]
@@ -498,18 +514,22 @@ class TestSpannerDocumentLoaderPostgreSQL:
     def test_loader_custom_format_csv(self, client):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            instance_id, pg_database, query, client=client, format="CSV"
+            instance_id,
+            pg_database,
+            query,
+            client=client,
+            content_columns=["product_id", "product_name"],
+            format="CSV",
         )
         docs = loader.load()
         assert docs == [
             Document(
-                page_content="1",
+                page_content="1, cards",
                 metadata={
-                    "product_name": "cards",
+                    "extra_metadata": "foobar",
+                    "foo": "bar",
                     "description": "playing cards are cool",
                     "price": 10,
-                    "foo": "bar",
-                    "extra_metadata": "foobar",
                 },
             )
         ]
@@ -535,9 +555,9 @@ class TestSpannerDocumentLoaderPostgreSQL:
             table_name,
             content_column="product_id",
             metadata_columns=[
-                ("product_name", "VARCHAR(1024)", True),
-                ("description", "VARCHAR(1024)", False),
-                ("price", "INT", False),
+                Column("product_name", "VARCHAR(1024)", True),
+                Column("description", "VARCHAR(1024)", False),
+                Column("price", "INT", False),
             ],
             metadata_json_column="my_metadata",
         )
@@ -606,15 +626,17 @@ class TestSpannerDocumentSaver:
         yield client
 
     def test_saver_google_sql(self, google_client):
-        SpannerDocumentSaver.init_document_table(instance_id, google_database, table_name)
+        SpannerDocumentSaver.init_document_table(
+            instance_id, google_database, table_name
+        )
         saver = SpannerDocumentSaver(
             instance_id, google_database, table_name, google_client
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             client=google_client,
-            instance=instance_id,
-            database=google_database,
+            instance_id=instance_id,
+            database_id=google_database,
             query=query,
         )
         expected_docs = [
@@ -631,7 +653,10 @@ class TestSpannerDocumentSaver:
         saver = SpannerDocumentSaver(instance_id, pg_database, table_name, pg_client)
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            client=pg_client, instance=instance_id, database=pg_database, query=query
+            client=pg_client,
+            instance_id=instance_id,
+            database_id=pg_database,
+            query=query,
         )
         expected_docs = [
             Document(page_content="Hello, World!", metadata={"source": "my-computer"}),
@@ -649,8 +674,8 @@ class TestSpannerDocumentSaver:
             table_name,
             content_column="my_page_content",
             metadata_columns=[
-                ("category", "STRING(35)", True),
-                ("price", "INT64", False),
+                Column("category", "STRING(35)", True),
+                Column("price", "INT64", False),
             ],
             primary_key="my_page_content",
             store_metadata=True,
@@ -661,8 +686,8 @@ class TestSpannerDocumentSaver:
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             client=google_client,
-            instance=instance_id,
-            database=google_database,
+            instance_id=instance_id,
+            database_id=google_database,
             query=query,
         )
         expected_docs = [
@@ -691,8 +716,8 @@ class TestSpannerDocumentSaver:
             table_name,
             content_column="my_page_content",
             metadata_columns=[
-                ("category", "VARCHAR(35)", True),
-                ("price", "INT", False),
+                Column("category", "VARCHAR(35)", True),
+                Column("price", "INT", False),
             ],
             primary_key="my_page_content",
             store_metadata=True,
@@ -700,7 +725,10 @@ class TestSpannerDocumentSaver:
         saver = SpannerDocumentSaver(instance_id, pg_database, table_name, pg_client)
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
-            client=pg_client, instance=instance_id, database=pg_database, query=query
+            client=pg_client,
+            instance_id=instance_id,
+            database_id=pg_database,
+            query=query,
         )
         expected_docs = [
             Document(
@@ -722,15 +750,17 @@ class TestSpannerDocumentSaver:
         ]
 
     def test_delete(self, google_client):
-        SpannerDocumentSaver.init_document_table(instance_id, google_database, table_name)
+        SpannerDocumentSaver.init_document_table(
+            instance_id, google_database, table_name
+        )
         saver = SpannerDocumentSaver(
             instance_id, google_database, table_name, google_client
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             client=google_client,
-            instance=instance_id,
-            database=google_database,
+            instance_id=instance_id,
+            database_id=google_database,
             query=query,
         )
         expected_docs = [
@@ -745,7 +775,9 @@ class TestSpannerDocumentSaver:
         assert loader.load() == [expected_docs[1]]
 
     def test_saver_with_bad_docs(self, google_client):
-        SpannerDocumentSaver.init_document_table(instance_id, google_database, table_name)
+        SpannerDocumentSaver.init_document_table(
+            instance_id, google_database, table_name
+        )
         saver = SpannerDocumentSaver(
             instance_id, google_database, table_name, google_client
         )

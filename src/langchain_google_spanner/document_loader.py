@@ -15,7 +15,7 @@
 import datetime
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Union
 
 from google.cloud.spanner import Client, KeySet  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect  # type: ignore
@@ -107,7 +107,7 @@ def _load_doc_to_row(
             del doc_metadata[metadata_json_column]
         metadata_json = {**metadata_json, **doc_metadata}
         j = json.dumps(metadata_json) if parse_json else metadata_json
-        row.append(j)
+        row.append(j)  # type: ignore
     return tuple(row)
 
 
@@ -131,7 +131,7 @@ class SpannerLoader(BaseLoader):
         format: str = "text",
         databoost: bool = False,
         metadata_json_column: str = METADATA_COL_NAME,
-        staleness: Union[float, datetime.datetime] = 15.0,
+        staleness: Union[float, datetime.datetime] = 0.0,
     ):
         """Initialize Spanner document loader.
 
@@ -162,13 +162,11 @@ class SpannerLoader(BaseLoader):
         self.databoost = databoost
         self.client = client
         self.staleness = staleness
-        if not self.client.instance(self.instance_id).exists():
+        instance = self.client.instance(instance_id)
+        if not instance.exists():
             raise Exception("Instance doesn't exist.")
-        if (
-            not self.client.instance(self.instance_id)
-            .database(self.database_id)
-            .exists()
-        ):
+        database = instance.database(database_id)
+        if not database.exists():
             raise Exception("Database doesn't exist.")
 
     def load(self) -> List[Document]:
@@ -235,9 +233,9 @@ class SpannerDocumentSaver:
         database_id: str,
         table_name: str,
         client: Client = Client(),
-        content_column: Optional[str] = "",
-        metadata_columns: Optional[List[str]] = [],
-        metadata_json_column: Optional[str] = METADATA_COL_NAME,
+        content_column: str = "",
+        metadata_columns: List[str] = [],
+        metadata_json_column: str = METADATA_COL_NAME,
     ):
         """Initialize Spanner document saver.
 
@@ -246,11 +244,10 @@ class SpannerDocumentSaver:
             database_id: The Spanner database to load data to.
             table_name: The table name to load data to.
             client: The connection object to use. This can be used to customized project id and credentials.
-            content_column: Optional. The name of the content column. Defaulted to the first column.
-            metadata_columns: Optional. This is for user to opt-in a selection of columns to use. Defaulted to use
+            content_column: The name of the content column. Defaulted to the first column.
+            metadata_columns: This is for user to opt-in a selection of columns to use. Defaulted to use
                               all columns.
-            store_metadata: If true, extra metadata will be stored in the "langchain_metadata" column.
-            metadata_json_column: Optional. The name of the special JSON column. Defaulted to use "langchain_metadata".
+            metadata_json_column: The name of the special JSON column. Defaulted to use "langchain_metadata".
         """
         self.instance_id = instance_id
         self.database_id = database_id
@@ -329,7 +326,7 @@ class SpannerDocumentSaver:
         metadata_columns: List[Column] = [],
         primary_key: str = "",
         store_metadata: bool = True,
-        metadata_json_column: Optional[str] = None,
+        metadata_json_column: str = METADATA_COL_NAME,
     ):
         """
         Create a new table to store docs with a custom schema.
@@ -343,13 +340,11 @@ class SpannerDocumentSaver:
             primary_key: The name of the primary key.
             store_metadata: If true, extra metadata will be stored in the "langchain_metadata" column.
                             Defaulted to true.
-            metadata_json_column: Optional. The name of the special JSON column. Defaulted to use "langchain_metadata".
+            metadata_json_column: The name of the special JSON column. Defaulted to use "langchain_metadata".
         """
         primary_key = primary_key or content_column
-        metadata_json_column = (
-            (metadata_json_column or METADATA_COL_NAME) if store_metadata else None
-        )
         client = Client()
+        metadata_json_column = metadata_json_column if store_metadata else ""
         instance = client.instance(instance_id)
         if not instance.exists():
             raise Exception("Instance doesn't exist.")
@@ -375,7 +370,7 @@ class SpannerDocumentSaver:
         database_id: str,
         table_name: str,
         primary_key: str,
-        metadata_json_column: Optional[str],
+        metadata_json_column: str,
         content_column: str,
         metadata_columns: List[Column],
     ):
