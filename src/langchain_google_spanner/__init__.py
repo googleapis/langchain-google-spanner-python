@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from .chat_message_history import SpannerChatMessageHistory
-from .document_loader import SpannerDocumentSaver, SpannerLoader
+from .loader import SpannerDocumentSaver, SpannerLoader
 from .version import __version__
 
 __all__ = [

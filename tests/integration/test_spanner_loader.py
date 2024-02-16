@@ -19,7 +19,7 @@ import pytest
 from google.cloud.spanner import Client, KeySet  # type: ignore
 from langchain_core.documents import Document
 
-from langchain_google_spanner.document_loader import (
+from langchain_google_spanner.loader import (
     Column,
     SpannerDocumentSaver,
     SpannerLoader,
