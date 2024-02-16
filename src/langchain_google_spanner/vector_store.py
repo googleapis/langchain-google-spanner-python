@@ -51,7 +51,7 @@ from google.cloud.spanner_v1 import Type
 logger = logging.getLogger(__name__)
 
 
-ID_COLUMN_NAME = "id"
+ID_COLUMN_NAME = "langchain_id"
 CONTENT_COLUMN_NAME = "content"
 EMBEDDING_COLUMN_NAME = "embedding"
 ADDITIONAL_METADATA_COLUMN_NAME = "metadata"
@@ -83,6 +83,20 @@ class TableColumn:
         if self.type is None:
             raise ValueError("type is mandatory and cannot be None.")
 
+@dataclass
+class SecondaryIndex:
+    index_name: str
+    columns: list[str]
+    storing_columns: list[str]
+
+    def __post_init__(self):
+        # Check if column_name is None after initialization
+        if self.index_name is None:
+            raise ValueError("Index Name can't be None")
+
+        if self.columns is None:
+            raise ValueError("Index Columns can't be None")
+
 
 class DistanceStrategy(Enum):
     """
@@ -109,16 +123,16 @@ class DialectSemantics(ABC):
         Returns:
         - str: The name of the distance function.
         """
-        pass
+        raise NotImplementedError("getDistanceFunction method must be implemented by subclass.")
 
 
     @abstractmethod
     def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
-        pass
+        raise NotImplementedError("getDeleteDocumentsParameters method must be implemented by subclass.")
 
     @abstractmethod
     def getDeleteDocumentsValueParameters(self, columns, values) -> Dict[str, Any]:
-        pass
+        raise NotImplementedError("getDeleteDocumentsValueParameters method must be implemented by subclass.")
 
 
 class GoogleSqlSemnatics(DialectSemantics):
@@ -178,11 +192,11 @@ class QueryParameters:
         Enum for nearest neighbors search algorithms.
         """
 
-        BRUTE_FORCE = 1
+        EXACT_NEAREST_NEIGHBOR = 1
 
     def __init__(
         self,
-        algorithm=NearestNeighborsAlgorithm.BRUTE_FORCE,
+        algorithm=NearestNeighborsAlgorithm.EXACT_NEAREST_NEIGHBOR,
         distance_strategy=DistanceStrategy.EUCLIDEIAN,
         read_timestamp: Optional[datetime.datetime] = None,
         min_read_timestamp: Optional[datetime.datetime] = None,
@@ -245,14 +259,15 @@ class SpannerVectorStore(VectorStore):
         instance_id: str,
         database_id: str,
         table_name: str,
-        client: Client = Client(project="span-cloud-testing"),
+        client: Client = Client(),
         id_column: Union[str, TableColumn] = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
         metadata_columns: Optional[List[TableColumn]] = None,
         primary_key: Optional[str] = None,
         vector_size: Optional[int] = None,
-    ):
+        secondary_index: Optional[List[SecondaryIndex]] = None,
+    ) -> bool:
         """
         Initialize the vector store new table in Google Cloud Spanner.
 
@@ -290,12 +305,12 @@ class SpannerVectorStore(VectorStore):
             primary_key,
         )
 
-        print(ddl)
-
         operation = database.update_ddl([ddl])
 
         print("Waiting for operation to complete...")
         operation.result(100000)
+
+        return True
 
     @staticmethod
     def _generate_sql(
@@ -460,6 +475,7 @@ class SpannerVectorStore(VectorStore):
                 for element in column_type_map.keys()
                 if element not in ignore_metadata_columns
             ]
+
             self._metadata_columns = [
                 item for item in columns_to_insert if item not in default_columns
             ]
@@ -478,7 +494,7 @@ class SpannerVectorStore(VectorStore):
 
         self._columns_to_insert = columns_to_insert
 
-        self._validate_table_schema(column_type_map, types)
+        self._validate_table_schema(column_type_map, types, default_columns)
 
     def _get_column_type_map(self, database, table_name):
         query = """
@@ -498,12 +514,18 @@ class SpannerVectorStore(VectorStore):
 
         return column_type_map
 
-    def _validate_table_schema(self, column_type_map, types):
+    def _validate_table_schema(self, column_type_map, types, default_columns):
         if not all(key in column_type_map for key in self._columns_to_insert):
             raise Exception(
                 "One or more columns from list not present in table: {} ",
                 self._columns_to_insert,
             )
+
+        if not all(key in column_type_map for key in default_columns):
+            raise Exception(
+                "One or more columns from the {}, {}, {} are not present in table. Please validate schema.",
+                self._id_column, self._content_column, self._embedding_column
+        )
 
         content_column_type = column_type_map[self._content_column][1]
         if not any(
@@ -585,10 +607,14 @@ class SpannerVectorStore(VectorStore):
             return []
 
         if ids is not None:
-            assert len(ids) == number_of_records
+            raise ValueError(
+                f"size of list of IDs should be equals to number of documents. Expected: {number_of_records}  but found {len(ids)}"
+            )
 
         if metadatas is not None:
-            assert len(metadatas) == number_of_records
+            raise ValueError(
+                f"size of list of metadatas should be equals to number of documents. Expected: {number_of_records}  but found {len(metadatas)}"
+            )
 
         embeds = self._embedding_service.embed_documents(texts_list)
 
