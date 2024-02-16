@@ -22,3 +22,15 @@ steps:
     name: python:3.11
     entrypoint: python
     args: ["-m", "pytest"]
+    env:
+      - 'PROJECT_ID=$PROJECT_ID'
+      - 'INSTANCE_ID=${_INSTANCE_ID}'
+      - 'GOOGLE_DATABASE=${_GOOGLE_DATABASE}'
+      - 'PG_DATABASE=${_PG_DATABASE}'
+      - 'TABLE_NAME=test_$BUILD_ID'
+    args: ["-m", "pytest"]
+
+substitutions:
+  _INSTANCE_ID: test-instance
+  _GOOGLE_DATABASE: test-google-db
+  _PG_DATABASE: test-pg-db
