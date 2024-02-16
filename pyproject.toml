@@ -1,6 +1,6 @@
 [project]
 name = "langchain-google-spanner"
-version = "0.0.1"
+dynamic = ["version"]
 description = "LangChain integrations for Google Cloud Spanner"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -9,6 +9,9 @@ dependencies = [
     "langchain==0.1.1",
     "google-cloud-spanner==3.41.0"
 ]
+
+[tool.setuptools.dynamic]
+version = {attr = "langchain_google_spanner.version.__version__"}
 
 [project.urls]
 Homepage = "https://github.com/googleapis/langchain-google-spanner-python"
