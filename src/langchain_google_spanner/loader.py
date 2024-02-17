@@ -76,30 +76,33 @@ def _load_row_to_doc(
 def _load_doc_to_row(
     table_fields: List[str],
     doc: Document,
+    content_column: str,
     metadata_json_column: str,
     parse_json: bool = True,
-):
+) -> tuple:
     """
     Load document to row.
 
     Args:
         table_fields: Spanner table fields names.
         doc: Document that is used.
+        content_column: Name of the content column.
         metadata_json_column: Name of the special JSON column.
         parse_json: Parse json column to string or leave it as JSON object. String format is needed to for Spanner inserts.
                     JSON object is used to compare with Spanner reads.
     """
     doc_metadata = doc.metadata.copy()
-    row = [doc.page_content]
-    # store metadata
+    row = []
     for col in table_fields:
         if (
-            col != CONTENT_COL_NAME
+            col != content_column
             and col != metadata_json_column
             and col in doc_metadata
         ):
             row.append(doc_metadata[col])
             del doc_metadata[col]
+        if col == content_column:
+            row.append(doc.page_content)
     if metadata_json_column in table_fields:
         metadata_json = {}
         if metadata_json_column in doc_metadata:
@@ -118,7 +121,7 @@ def _batch(datas: List[Any], size: int = 1) -> Iterator[List[Any]]:
 
 
 class SpannerLoader(BaseLoader):
-    """Loads data from Google CLoud Spanner."""
+    """Loads data from Google Cloud Spanner."""
 
     def __init__(
         self,
@@ -158,7 +161,7 @@ class SpannerLoader(BaseLoader):
         self.metadata_json_column = metadata_json_column
         formats = ["JSON", "text", "YAML", "CSV"]
         if self.format not in formats:
-            raise Exception("Use on of 'text', 'JSON', 'YAML', 'CSV'")
+            raise Exception("Use one of 'text', 'JSON', 'YAML', 'CSV'.")
         self.databoost = databoost
         self.client = client
         self.staleness = staleness
@@ -233,7 +236,7 @@ class SpannerDocumentSaver:
         database_id: str,
         table_name: str,
         client: Client = Client(),
-        content_column: str = "",
+        content_column: str = CONTENT_COL_NAME,
         metadata_columns: List[str] = [],
         metadata_json_column: str = METADATA_COL_NAME,
     ):
@@ -269,16 +272,19 @@ class SpannerDocumentSaver:
             raise Exception(
                 "Table doesn't exist. Create table with SpannerDocumentSaver.init_document_table function."
             )
-        self._table_fields = [
-            n.name for n in table.schema if n.name != self.metadata_json_column
-        ]
-        self._table_fields.append(self.metadata_json_column)
+        self._table_fields = [content_column]
+        self._table_fields.append(
+            [n.name for n in table.schema if n.name != metadata_json_column]
+        )
+        self._table_fields.append(metadata_json_column)
 
     def add_documents(self, documents: List[Document]):
         """Add documents to the Spanner table."""
         db = self.client.instance(self.instance_id).database(self.database_id)
         values = [
-            _load_doc_to_row(self._table_fields, doc, self.metadata_json_column)
+            _load_doc_to_row(
+                self._table_fields, doc, self.content_column, self.metadata_json_column
+            )
             for doc in documents
         ]
 
@@ -295,7 +301,13 @@ class SpannerDocumentSaver:
         database = self.client.instance(self.instance_id).database(self.database_id)
         # load documents to row
         docs = [
-            _load_doc_to_row(self._table_fields, doc, self.metadata_json_column, False)
+            _load_doc_to_row(
+                self._table_fields,
+                doc,
+                self.content_column,
+                self.metadata_json_column,
+                False,
+            )
             for doc in documents
         ]
         keys = [[doc[0]] for doc in docs]

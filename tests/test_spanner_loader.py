@@ -19,11 +19,7 @@ import pytest
 from google.cloud.spanner import Client, KeySet  # type: ignore
 from langchain_core.documents import Document
 
-from langchain_google_spanner.loader import (
-    Column,
-    SpannerDocumentSaver,
-    SpannerLoader,
-)
+from langchain_google_spanner.loader import Column, SpannerDocumentSaver, SpannerLoader
 
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
