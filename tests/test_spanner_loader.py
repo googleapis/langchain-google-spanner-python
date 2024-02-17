@@ -50,6 +50,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
                 Column("product_name", "STRING(1024)", True),
                 Column("description", "STRING(1024)", False),
                 Column("price", "INT64", False),
+                Column("dummy_col", "STRING(1024)", False),
             ],
         )
 
@@ -59,7 +60,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
             table_name,
             client,
             content_column="product_id",
-            metadata_columns=["product_name", "description", "price"],
+            metadata_columns=["product_name", "description", "price", "dummy_col"],
         )
         test_documents = [
             Document(
@@ -68,6 +69,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
                     "product_name": "cards",
                     "description": "playing cards are cool",
                     "price": 10,
+                    "dummy_col": "",
                     "extra_metadata": "foobar",
                     "langchain_metadata": {
                         "foo": "bar",
@@ -92,6 +94,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
                             "product_name": "cards",
                             "description": "playing cards are cool",
                             "price": 10,
+                            "dummy_col": "",
                         },
                     )
                 ],
@@ -119,27 +122,52 @@ class TestSpannerDocumentLoaderGoogleSQL:
             SpannerLoader(instance_id, google_database)
 
     # Custom CUJs
-    def test_loader_custom_content(self, client):
+    @pytest.mark.parametrize(
+        "content_columns, expected",
+        [
+            pytest.param(
+                ["description", "price"],
+                [
+                    Document(
+                        page_content="playing cards are cool 10",
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "product_id": "1",
+                            "product_name": "cards",
+                            "dummy_col": "",
+                        },
+                    ),
+                ],
+            ),
+            pytest.param(
+                ["description", "dummy_col"],
+                [
+                    Document(
+                        page_content="playing cards are cool",
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "product_id": "1",
+                            "product_name": "cards",
+                            "price": 10,
+                        },
+                    ),
+                ],
+            ),
+        ],
+    )
+    def test_loader_custom_content(self, client, content_columns, expected):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             instance_id,
             google_database,
             query,
             client=client,
-            content_columns=["description", "price"],
+            content_columns=content_columns,
         )
         docs = loader.load()
-        assert docs == [
-            Document(
-                page_content="playing cards are cool 10",
-                metadata={
-                    "extra_metadata": "foobar",
-                    "foo": "bar",
-                    "product_id": "1",
-                    "product_name": "cards",
-                },
-            ),
-        ]
+        assert docs == expected
 
     def test_loader_custom_metadata(self, client):
         query = f"SELECT * FROM {table_name}"
@@ -176,74 +204,149 @@ class TestSpannerDocumentLoaderGoogleSQL:
             ),
         ]
 
-    def test_loader_custom_format_json(self, client):
+    @pytest.mark.parametrize(
+        "content_columns, expected",
+        [
+            pytest.param(
+                ["product_id", "product_name"],
+                [
+                    Document(
+                        page_content='{"product_id": "1", "product_name": "cards"}',
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                            "dummy_col": "",
+                        },
+                    ),
+                ],
+            ),
+            pytest.param(
+                ["product_id", "dummy_col"],
+                [
+                    Document(
+                        page_content='{"product_id": "1", "dummy_col": ""}',
+                        metadata={
+                            "product_name": "cards",
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                        },
+                    ),
+                ],
+            ),
+        ],
+    )
+    def test_loader_custom_format_json(self, client, content_columns, expected):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             instance_id,
             google_database,
             query,
             client=client,
-            content_columns=["product_id", "product_name"],
+            content_columns=content_columns,
             format="JSON",
         )
         docs = loader.load()
-        assert docs == [
-            Document(
-                page_content='{"product_id": "1", "product_name": "cards"}',
-                metadata={
-                    "extra_metadata": "foobar",
-                    "foo": "bar",
-                    "description": "playing cards are cool",
-                    "price": 10,
-                },
-            )
-        ]
+        assert docs == expected
 
-    def test_loader_custom_format_yaml(self, client):
+    @pytest.mark.parametrize(
+        "content_columns, expected",
+        [
+            pytest.param(
+                ["product_id", "product_name"],
+                [
+                    Document(
+                        page_content="product_id: 1\nproduct_name: cards",
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                            "dummy_col": "",
+                        },
+                    ),
+                ],
+            ),
+            pytest.param(
+                ["product_id", "dummy_col"],
+                [
+                    Document(
+                        page_content="product_id: 1\ndummy_col: ",
+                        metadata={
+                            "product_name": "cards",
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                        },
+                    ),
+                ],
+            ),
+        ],
+    )
+    def test_loader_custom_format_yaml(self, client, content_columns, expected):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             instance_id,
             google_database,
             query,
             client=client,
-            content_columns=["product_id", "product_name"],
+            content_columns=content_columns,
             format="YAML",
         )
         docs = loader.load()
-        assert docs == [
-            Document(
-                page_content="product_id: 1\nproduct_name: cards",
-                metadata={
-                    "extra_metadata": "foobar",
-                    "foo": "bar",
-                    "description": "playing cards are cool",
-                    "price": 10,
-                },
-            )
-        ]
+        assert docs == expected
 
-    def test_loader_custom_format_csv(self, client):
+    @pytest.mark.parametrize(
+        "content_columns, expected",
+        [
+            pytest.param(
+                ["product_id", "product_name"],
+                [
+                    Document(
+                        page_content="1, cards",
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                            "dummy_col": "",
+                        },
+                    ),
+                ],
+            ),
+            pytest.param(
+                ["product_id", "dummy_col"],
+                [
+                    Document(
+                        page_content="1",
+                        metadata={
+                            "product_name": "cards",
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                        },
+                    ),
+                ],
+            ),
+        ],
+    )
+    def test_loader_custom_format_csv(self, client, content_columns, expected):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             instance_id,
             google_database,
             query,
             client=client,
-            content_columns=["product_id", "product_name"],
+            content_columns=content_columns,
             format="CSV",
         )
         docs = loader.load()
-        assert docs == [
-            Document(
-                page_content="1, cards",
-                metadata={
-                    "extra_metadata": "foobar",
-                    "foo": "bar",
-                    "description": "playing cards are cool",
-                    "price": 10,
-                },
-            )
-        ]
+        assert docs == expected
 
     def test_loader_custom_format_error(self, client):
         query = f"SELECT * FROM {table_name}"
@@ -255,6 +358,31 @@ class TestSpannerDocumentLoaderGoogleSQL:
                 client,
                 format="NOT_A_FORMAT",
             )
+            docs = loader.load()
+
+    def test_loader_custom_content_key_error(self, client):
+        query = f"SELECT * FROM {table_name}"
+        with pytest.raises(Exception):
+            loader = SpannerLoader(
+                instance_id,
+                google_database,
+                query,
+                client,
+                content_columns=["NOT_A_COLUMN"],
+            )
+            docs = loader.load()
+
+    def test_loader_custom_metadata_key_error(self, client):
+        query = f"SELECT * FROM {table_name}"
+        with pytest.raises(Exception):
+            loader = SpannerLoader(
+                instance_id,
+                google_database,
+                query,
+                client,
+                metadata_columns=["NOT_A_COLUMN"],
+            )
+            docs = loader.load()
 
     def test_loader_custom_json_metadata(self, client):
         database = client.instance(instance_id).database(google_database)
@@ -335,6 +463,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
                 Column("product_name", "VARCHAR(1024)", True),
                 Column("description", "VARCHAR(1024)", False),
                 Column("price", "INT", False),
+                Column("dummy_col", "VARCHAR(1024)", False),
             ],
         )
 
@@ -344,7 +473,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
             table_name,
             client,
             content_column="product_id",
-            metadata_columns=["product_name", "description", "price"],
+            metadata_columns=["product_name", "description", "price", "dummy_col"],
         )
         test_documents = [
             Document(
@@ -353,6 +482,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
                     "product_name": "cards",
                     "description": "playing cards are cool",
                     "price": 10,
+                    "dummy_col": "",
                     "extra_metadata": "foobar",
                     "langchain_metadata": {
                         "foo": "bar",
@@ -377,6 +507,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
                             "product_name": "cards",
                             "description": "playing cards are cool",
                             "price": 10,
+                            "dummy_col": "",
                         },
                     )
                 ],
@@ -404,27 +535,52 @@ class TestSpannerDocumentLoaderPostgreSQL:
             SpannerLoader(instance_id, pg_database)
 
     # Custom CUJs
-    def test_loader_custom_content(self, client):
+    @pytest.mark.parametrize(
+        "content_columns, expected",
+        [
+            pytest.param(
+                ["description", "price"],
+                [
+                    Document(
+                        page_content="playing cards are cool 10",
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "product_id": "1",
+                            "product_name": "cards",
+                            "dummy_col": "",
+                        },
+                    ),
+                ],
+            ),
+            pytest.param(
+                ["description", "dummy_col"],
+                [
+                    Document(
+                        page_content="playing cards are cool",
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "product_id": "1",
+                            "product_name": "cards",
+                            "price": 10,
+                        },
+                    ),
+                ],
+            ),
+        ],
+    )
+    def test_loader_custom_content(self, client, content_columns, expected):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             instance_id,
             pg_database,
             query,
             client=client,
-            content_columns=["description", "price"],
+            content_columns=content_columns,
         )
         docs = loader.load()
-        assert docs == [
-            Document(
-                page_content="playing cards are cool 10",
-                metadata={
-                    "extra_metadata": "foobar",
-                    "foo": "bar",
-                    "product_id": "1",
-                    "product_name": "cards",
-                },
-            ),
-        ]
+        assert docs == expected
 
     def test_loader_custom_metadata(self, client):
         query = f"SELECT * FROM {table_name}"
@@ -461,74 +617,149 @@ class TestSpannerDocumentLoaderPostgreSQL:
             ),
         ]
 
-    def test_loader_custom_format_json(self, client):
+    @pytest.mark.parametrize(
+        "content_columns, expected",
+        [
+            pytest.param(
+                ["product_id", "product_name"],
+                [
+                    Document(
+                        page_content='{"product_id": "1", "product_name": "cards"}',
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                            "dummy_col": "",
+                        },
+                    ),
+                ],
+            ),
+            pytest.param(
+                ["product_id", "dummy_col"],
+                [
+                    Document(
+                        page_content='{"product_id": "1", "dummy_col": ""}',
+                        metadata={
+                            "product_name": "cards",
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                        },
+                    ),
+                ],
+            ),
+        ],
+    )
+    def test_loader_custom_format_json(self, client, content_columns, expected):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             instance_id,
             pg_database,
             query,
             client=client,
-            content_columns=["product_id", "product_name"],
+            content_columns=content_columns,
             format="JSON",
         )
         docs = loader.load()
-        assert docs == [
-            Document(
-                page_content='{"product_id": "1", "product_name": "cards"}',
-                metadata={
-                    "extra_metadata": "foobar",
-                    "foo": "bar",
-                    "description": "playing cards are cool",
-                    "price": 10,
-                },
-            )
-        ]
+        assert docs == expected
 
-    def test_loader_custom_format_yaml(self, client):
+    @pytest.mark.parametrize(
+        "content_columns, expected",
+        [
+            pytest.param(
+                ["product_id", "product_name"],
+                [
+                    Document(
+                        page_content="product_id: 1\nproduct_name: cards",
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                            "dummy_col": "",
+                        },
+                    ),
+                ],
+            ),
+            pytest.param(
+                ["product_id", "dummy_col"],
+                [
+                    Document(
+                        page_content="product_id: 1\ndummy_col: ",
+                        metadata={
+                            "product_name": "cards",
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                        },
+                    ),
+                ],
+            ),
+        ],
+    )
+    def test_loader_custom_format_yaml(self, client, content_columns, expected):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             instance_id,
             pg_database,
             query,
             client=client,
-            content_columns=["product_id", "product_name"],
+            content_columns=content_columns,
             format="YAML",
         )
         docs = loader.load()
-        assert docs == [
-            Document(
-                page_content="product_id: 1\nproduct_name: cards",
-                metadata={
-                    "extra_metadata": "foobar",
-                    "foo": "bar",
-                    "description": "playing cards are cool",
-                    "price": 10,
-                },
-            )
-        ]
+        assert docs == expected
 
-    def test_loader_custom_format_csv(self, client):
+    @pytest.mark.parametrize(
+        "content_columns, expected",
+        [
+            pytest.param(
+                ["product_id", "product_name"],
+                [
+                    Document(
+                        page_content="1, cards",
+                        metadata={
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                            "dummy_col": "",
+                        },
+                    ),
+                ],
+            ),
+            pytest.param(
+                ["product_id", "dummy_col"],
+                [
+                    Document(
+                        page_content="1",
+                        metadata={
+                            "product_name": "cards",
+                            "extra_metadata": "foobar",
+                            "foo": "bar",
+                            "description": "playing cards are cool",
+                            "price": 10,
+                        },
+                    ),
+                ],
+            ),
+        ],
+    )
+    def test_loader_custom_format_csv(self, client, content_columns, expected):
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             instance_id,
             pg_database,
             query,
             client=client,
-            content_columns=["product_id", "product_name"],
+            content_columns=content_columns,
             format="CSV",
         )
         docs = loader.load()
-        assert docs == [
-            Document(
-                page_content="1, cards",
-                metadata={
-                    "extra_metadata": "foobar",
-                    "foo": "bar",
-                    "description": "playing cards are cool",
-                    "price": 10,
-                },
-            )
-        ]
+        assert docs == expected
 
     def test_loader_custom_format_error(self, client):
         query = f"SELECT * FROM {table_name}"
@@ -540,6 +771,30 @@ class TestSpannerDocumentLoaderPostgreSQL:
                 client,
                 format="NOT_A_FORMAT",
             )
+
+    def test_loader_custom_content_key_error(self, client):
+        query = f"SELECT * FROM {table_name}"
+        with pytest.raises(Exception):
+            loader = SpannerLoader(
+                instance_id,
+                pg_database,
+                query,
+                client,
+                content_columns=["NOT_A_COLUMN"],
+            )
+            docs = loader.load()
+
+    def test_loader_custom_metadata_key_error(self, client):
+        query = f"SELECT * FROM {table_name}"
+        with pytest.raises(Exception):
+            loader = SpannerLoader(
+                instance_id,
+                pg_database,
+                query,
+                client,
+                metadata_columns=["NOT_A_COLUMN"],
+            )
+            docs = loader.load()
 
     def test_loader_custom_json_metadata(self, client):
         database = client.instance(instance_id).database(pg_database)
@@ -677,7 +932,11 @@ class TestSpannerDocumentSaver:
             store_metadata=True,
         )
         saver = SpannerDocumentSaver(
-            instance_id, google_database, table_name, google_client
+            instance_id,
+            google_database,
+            table_name,
+            google_client,
+            content_column="my_page_content",
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
@@ -718,7 +977,13 @@ class TestSpannerDocumentSaver:
             primary_key="my_page_content",
             store_metadata=True,
         )
-        saver = SpannerDocumentSaver(instance_id, pg_database, table_name, pg_client)
+        saver = SpannerDocumentSaver(
+            instance_id,
+            pg_database,
+            table_name,
+            pg_client,
+            content_column="my_page_content",
+        )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             client=pg_client,

@@ -46,28 +46,23 @@ def _load_row_to_doc(
 ) -> Document:
     page_content = ""
     if format == "text":
-        page_content = " ".join(str(row[c]) for c in content_columns if c in row)
+        page_content = " ".join(str(row[c]) for c in content_columns if row[c])
     elif format == "YAML":
-        page_content = "\n".join(
-            f"{c}: {str(row[c])}" for c in content_columns if c in row
-        )
+        page_content = "\n".join(f"{c}: {str(row[c])}" for c in content_columns)
     elif format == "JSON":
         j = {}
         for c in content_columns:
-            if c in row:
-                j[c] = row[c]
+            j[c] = row[c]
         page_content = json.dumps(j)
     elif format == "CSV":
-        page_content = ", ".join(str(row[c]) for c in content_columns if c in row)
-    if not page_content:
-        raise Exception("column page_content doesn't exist.")
+        page_content = ", ".join(str(row[c]) for c in content_columns if row[c])
 
     metadata: Dict[str, Any] = {}
     if metadata_json_column in metadata_columns and row.get(metadata_json_column):
         metadata = row[metadata_json_column]
 
     for c in metadata_columns:
-        if c in row and c != metadata_json_column:
+        if c != metadata_json_column:
             metadata[c] = row[c]
 
     return Document(page_content=page_content, metadata=metadata)
@@ -272,10 +267,9 @@ class SpannerDocumentSaver:
             raise Exception(
                 "Table doesn't exist. Create table with SpannerDocumentSaver.init_document_table function."
             )
-        self._table_fields = [content_column]
-        self._table_fields.append(
-            [n.name for n in table.schema if n.name != metadata_json_column]
-        )
+        self._table_fields = [
+            n.name for n in table.schema if n.name != metadata_json_column
+        ]
         self._table_fields.append(metadata_json_column)
 
     def add_documents(self, documents: List[Document]):
