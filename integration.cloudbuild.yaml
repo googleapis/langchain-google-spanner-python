@@ -28,7 +28,6 @@ steps:
       - 'GOOGLE_DATABASE=${_GOOGLE_DATABASE}'
       - 'PG_DATABASE=${_PG_DATABASE}'
       - 'TABLE_NAME=test_$BUILD_ID'
-    args: ["-m", "pytest"]
 
 substitutions:
   _INSTANCE_ID: test-instance

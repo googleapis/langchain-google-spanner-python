@@ -15,7 +15,7 @@
 """Cloud Spanner-based chat message history"""
 from __future__ import annotations
 
-import uuid
+import json
 from typing import List, Optional
 
 from google.cloud import spanner
@@ -45,12 +45,13 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
         self,
         instance_id: str,
         database_id: str,
-        table_name: str = "message_store",
-        session_id: Optional[str] = None,
+        session_id: str,
+        table_name: str,
         client: Optional[spanner.Client] = None,
     ) -> None:
         self.instance_id = instance_id
         self.database_id = database_id
+        self.session_id = session_id
         self.table_name = table_name
         self.client = client or spanner.Client()
         self.instance = self.client.instance(instance_id)
@@ -61,10 +62,57 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
             raise Exception("Database doesn't exist.")
         self.database.reload()
         self.dialect = self.database.database_dialect
-        self.session_id = session_id or uuid.uuid4().hex
-        self._create_table_if_not_exists()
+        self._verify_schema()
 
-    def _create_table_if_not_exists(self) -> None:
+    def _verify_schema(self) -> None:
+        """Verify table exists with required schema for SpannerChatMessageHistory class.
+        Use helper method MSSQLEngine.create_chat_history_table(...) to create
+        table with valid schema.
+        """
+        # check table exists
+        column_names = []
+        with self.database.snapshot() as snapshot:
+            results = snapshot.execute_sql(
+                f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.columns WHERE table_name = '{self.table_name}'"
+            )
+            for row in results:
+                column_names.append(*row)
+
+        # check that all required columns are present
+        required_columns = ["id", "session_id", "created_at", "message"]
+        if len(column_names) == 0:
+            raise AttributeError(
+                f"Table '{self.table_name}' does not exist. Please create "
+                "it before initializing SpannerChatMessageHistory. See "
+                "SpannerEngine.create_chat_history_table() for a helper method."
+            )
+        else:
+            if not (all(x in column_names for x in required_columns)):
+                google_schema = f"""CREATE TABLE IF NOT EXISTS {self.table_name} (
+                                            id STRING(36) DEFAULT (GENERATE_UUID()),
+                                            created_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
+                                            session_id STRING(MAX) NOT NULL,
+                                            message JSON NOT NULL,
+                                         ) PRIMARY KEY (session_id, created_at ASC, id)"""
+                pg_schema = f"""CREATE TABLE IF NOT EXISTS {self.table_name}  (
+                                             id varchar(36) DEFAULT (spanner.generate_uuid()),
+                                             created_at SPANNER.COMMIT_TIMESTAMP NOT NULL,
+                                             session_id TEXT NOT NULL,
+                                             message JSONB NOT NULL,
+                                             PRIMARY KEY (session_id, created_at, id)"""
+                ddl = (
+                    pg_schema
+                    if self.dialect == DatabaseDialect.POSTGRESQL
+                    else google_schema
+                )
+                raise IndexError(
+                    f"Table '{self.table_name}' has incorrect schema. Got "
+                    f"column names '{column_names}' but required column names "
+                    f"'{required_columns}'.\nPlease create table with following schema:"
+                    f"{ddl};"
+                )
+
+    def create_chat_history_table(self) -> None:
         google_schema = f"""CREATE TABLE IF NOT EXISTS {self.table_name} (
                             id STRING(36) DEFAULT (GENERATE_UUID()),
                             created_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
@@ -77,7 +125,7 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
                              created_at SPANNER.COMMIT_TIMESTAMP NOT NULL,
                              session_id TEXT NOT NULL,
                              message JSONB NOT NULL,
-                             PRIMARY KEY (session_id, created_at ASC, id)
+                             PRIMARY KEY (session_id, created_at, id)
                          );"""
 
         ddl = pg_schema if self.dialect == DatabaseDialect.POSTGRESQL else google_schema
@@ -100,7 +148,9 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
                 params=param,
                 param_types=param_type,
             )
-        items = [result[0] for result in results]
+        items = []
+        for row in results:
+            items.append({"data": row[0], "type": row[0]["type"]})
         messages = messages_from_dict(items)
         return messages
 
@@ -114,7 +164,7 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
                     (
                         self.session_id,
                         spanner.COMMIT_TIMESTAMP,
-                        JsonObject(message_to_dict(message)),
+                        JsonObject(message.dict()),
                     ),
                 ],
             )
