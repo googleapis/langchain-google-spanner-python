@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import os
+
 import pytest  # noqa
 from google.cloud.spanner import Client  # type: ignore
 from langchain_core.messages.ai import AIMessage
@@ -22,7 +24,7 @@ from langchain_google_spanner import SpannerChatMessageHistory
 
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
-table_name = os.environ["TABLE_NAME"]
+table_name = os.environ["TABLE_NAME"].replace("-", "_")
 
 OPERATION_TIMEOUT_SECONDS = 240
 

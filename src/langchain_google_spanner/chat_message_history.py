@@ -15,7 +15,6 @@
 """Cloud Spanner-based chat message history"""
 from __future__ import annotations
 
-import json
 from typing import List, Optional
 
 from google.cloud import spanner
@@ -23,7 +22,7 @@ from google.cloud.spanner_admin_database_v1.types import DatabaseDialect  # type
 from google.cloud.spanner_v1 import param_types
 from google.cloud.spanner_v1.data_types import JsonObject
 from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import BaseMessage, message_to_dict, messages_from_dict
+from langchain_core.messages import BaseMessage, messages_from_dict
 
 OPERATION_TIMEOUT_SECONDS = 240
 
@@ -70,7 +69,7 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
         table with valid schema.
         """
         # check table exists
-        column_names = []
+        column_names = []  # type: List[str]
         with self.database.snapshot() as snapshot:
             results = snapshot.execute_sql(
                 f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.columns WHERE table_name = '{self.table_name}'"
@@ -148,7 +147,7 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
                 params=param,
                 param_types=param_type,
             )
-        items = []
+        items = []  # type: List[dict]
         for row in results:
             items.append({"data": row[0], "type": row[0]["type"]})
         messages = messages_from_dict(items)
