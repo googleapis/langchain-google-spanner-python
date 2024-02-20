@@ -12,8 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_google_spanner.chat_message_history import SpannerChatMessageHistory
-
-from .version import __version__
-
-__all__ = ["__version__", "SpannerChatMessageHistory"]
+__version__ = "0.0.1"
