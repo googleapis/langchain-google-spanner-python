@@ -58,7 +58,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
             instance_id,
             google_database,
             table_name,
-            client,
+            client=client,
             content_column="product_id",
             metadata_columns=["product_name", "description", "price", "dummy_col"],
         )
@@ -355,7 +355,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
                 instance_id,
                 google_database,
                 query,
-                client,
+                client=client,
                 format="NOT_A_FORMAT",
             )
             docs = loader.load()
@@ -367,7 +367,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
                 instance_id,
                 google_database,
                 query,
-                client,
+                client=client,
                 content_columns=["NOT_A_COLUMN"],
             )
             docs = loader.load()
@@ -379,7 +379,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
                 instance_id,
                 google_database,
                 query,
-                client,
+                client=client,
                 metadata_columns=["NOT_A_COLUMN"],
             )
             docs = loader.load()
@@ -405,7 +405,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
             instance_id,
             google_database,
             table_name,
-            client,
+            client=client,
             content_column="product_id",
             metadata_columns=["product_name", "description", "price"],
             metadata_json_column="my_metadata",
@@ -471,7 +471,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
             instance_id,
             pg_database,
             table_name,
-            client,
+            client=client,
             content_column="product_id",
             metadata_columns=["product_name", "description", "price", "dummy_col"],
         )
@@ -768,7 +768,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
                 instance_id,
                 pg_database,
                 query,
-                client,
+                client=client,
                 format="NOT_A_FORMAT",
             )
 
@@ -779,7 +779,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
                 instance_id,
                 pg_database,
                 query,
-                client,
+                client=client,
                 content_columns=["NOT_A_COLUMN"],
             )
             docs = loader.load()
@@ -791,7 +791,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
                 instance_id,
                 pg_database,
                 query,
-                client,
+                client=client,
                 metadata_columns=["NOT_A_COLUMN"],
             )
             docs = loader.load()
@@ -817,7 +817,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
             instance_id,
             pg_database,
             table_name,
-            client,
+            client=client,
             content_column="product_id",
             metadata_columns=["product_name", "description", "price"],
             metadata_json_column="my_metadata",
@@ -881,7 +881,7 @@ class TestSpannerDocumentSaver:
             instance_id, google_database, table_name
         )
         saver = SpannerDocumentSaver(
-            instance_id, google_database, table_name, google_client
+            instance_id, google_database, table_name, client=google_client
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
@@ -901,7 +901,9 @@ class TestSpannerDocumentSaver:
 
     def test_saver_pg(self, pg_client):
         SpannerDocumentSaver.init_document_table(instance_id, pg_database, table_name)
-        saver = SpannerDocumentSaver(instance_id, pg_database, table_name, pg_client)
+        saver = SpannerDocumentSaver(
+            instance_id, pg_database, table_name, client=pg_client
+        )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
             client=pg_client,
@@ -935,7 +937,7 @@ class TestSpannerDocumentSaver:
             instance_id,
             google_database,
             table_name,
-            google_client,
+            client=google_client,
             content_column="my_page_content",
         )
         query = f"SELECT * FROM {table_name}"
@@ -981,7 +983,7 @@ class TestSpannerDocumentSaver:
             instance_id,
             pg_database,
             table_name,
-            pg_client,
+            client=pg_client,
             content_column="my_page_content",
         )
         query = f"SELECT * FROM {table_name}"
@@ -1015,7 +1017,7 @@ class TestSpannerDocumentSaver:
             instance_id, google_database, table_name
         )
         saver = SpannerDocumentSaver(
-            instance_id, google_database, table_name, google_client
+            instance_id, google_database, table_name, client=google_client
         )
         query = f"SELECT * FROM {table_name}"
         loader = SpannerLoader(
@@ -1040,7 +1042,7 @@ class TestSpannerDocumentSaver:
             instance_id, google_database, table_name
         )
         saver = SpannerDocumentSaver(
-            instance_id, google_database, table_name, google_client
+            instance_id, google_database, table_name, client=google_client
         )
         with pytest.raises(Exception):
             saver.add_documents([1, 2, 3])
