@@ -46,6 +46,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from langchain_community.vectorstores.utils import maximal_marginal_relevance
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,6 +58,7 @@ KNN_DISTANCE_SEARCH_QUERY_ALIAS = "distance"
 
 from dataclasses import dataclass
 
+
 @dataclass
 class TableColumn:
     """
@@ -67,10 +69,10 @@ class TableColumn:
         type (str): The type of the column.
         is_null (bool): Indicates whether the column allows null values.
     """
+
     name: str
     type: str
     is_null: bool = True
-
 
     def __post_init__(self):
         # Check if column_name is None after initialization
@@ -80,10 +82,12 @@ class TableColumn:
         if self.type is None:
             raise ValueError("type is mandatory and cannot be None.")
 
+
 class DistanceStrategy(Enum):
     """
     Enum for distance calculation strategies.
     """
+
     COSINE = 1
     EUCLIDEIAN = 2
 
@@ -92,6 +96,7 @@ class DialectSemantics(ABC):
     """
     Abstract base class for dialect semantics.
     """
+
     @abstractmethod
     def getDistanceFunction(self, distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
         """
@@ -110,6 +115,7 @@ class GoogleSqlSemnatics(DialectSemantics):
     """
     Implementation of dialect semantics for Google SQL.
     """
+
     def getDistanceFunction(self, distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
         if distance_strategy == DistanceStrategy.COSINE:
             return "COSINE_DISTANCE"
@@ -121,6 +127,7 @@ class PGSqlSemnatics(DialectSemantics):
     """
     Implementation of dialect semantics for PostgreSQL.
     """
+
     def getDistanceFunction(self, distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
         if distance_strategy == DistanceStrategy.COSINE:
             return "spanner.cosine_distance"
@@ -131,10 +138,12 @@ class QueryParameters:
     """
     Class representing query parameters for nearest neighbors search.
     """
+
     class NearestNeighborsAlgorithm(Enum):
         """
         Enum for nearest neighbors search algorithms.
         """
+
         BRUTE_FORCE = 1
 
     def __init__(
@@ -158,20 +167,21 @@ class QueryParameters:
 
 class SpannerVectorStore(VectorStore):
     GSQL_TYPES = {
-        CONTENT_COLUMN_NAME: ['STRING'],
-        EMBEDDING_COLUMN_NAME: ['ARRAY<FLOAT64>'],
-        'metadata_json_column': ['JSON']
+        CONTENT_COLUMN_NAME: ["STRING"],
+        EMBEDDING_COLUMN_NAME: ["ARRAY<FLOAT64>"],
+        "metadata_json_column": ["JSON"],
     }
 
     PGSQL_TYPES = {
-        CONTENT_COLUMN_NAME: ['character varying'],
-        EMBEDDING_COLUMN_NAME: ['double precision[]'],
-        'metadata_json_column': ['jsonb']
+        CONTENT_COLUMN_NAME: ["character varying"],
+        EMBEDDING_COLUMN_NAME: ["double precision[]"],
+        "metadata_json_column": ["jsonb"],
     }
 
     """
     A class for managing vector stores in Google Cloud Spanner.
     """
+
     @staticmethod
     def init_vector_store_table(
         instance_id: str,
@@ -219,10 +229,10 @@ class SpannerVectorStore(VectorStore):
             content_column,
             embedding_column,
             metadata_columns,
-            primary_key
+            primary_key,
         )
 
-        print (ddl)
+        print(ddl)
 
         operation = database.update_ddl([ddl])
 
@@ -237,7 +247,7 @@ class SpannerVectorStore(VectorStore):
         content_column,
         embedding_column,
         column_configs,
-        primary_key
+        primary_key,
     ):
         """
         Generate SQL for creating the vector store table.
@@ -257,24 +267,27 @@ class SpannerVectorStore(VectorStore):
 
         if not isinstance(id_column, TableColumn):
             if dialect == DatabaseDialect.POSTGRESQL:
-                id_column = TableColumn(id_column, 'varchar(36)', is_null=True)
+                id_column = TableColumn(id_column, "varchar(36)", is_null=True)
             else:
-                id_column = TableColumn(id_column, 'STRING(36)', is_null=True)
-
+                id_column = TableColumn(id_column, "STRING(36)", is_null=True)
 
         if not isinstance(content_column, TableColumn):
             if dialect == DatabaseDialect.POSTGRESQL:
-                content_column = TableColumn(content_column, 'text', is_null=True)
+                content_column = TableColumn(content_column, "text", is_null=True)
             else:
-                content_column = TableColumn(content_column, 'STRING(MAX)', is_null=True)
-
+                content_column = TableColumn(
+                    content_column, "STRING(MAX)", is_null=True
+                )
 
         if not isinstance(embedding_column, TableColumn):
             if dialect == DatabaseDialect.POSTGRESQL:
-                embedding_column = TableColumn(embedding_column, 'float8[]', is_null=True)
+                embedding_column = TableColumn(
+                    embedding_column, "float8[]", is_null=True
+                )
             else:
-                embedding_column = TableColumn(embedding_column, 'ARRAY<FLOAT64>', is_null=True)
-
+                embedding_column = TableColumn(
+                    embedding_column, "ARRAY<FLOAT64>", is_null=True
+                )
 
         configs = [id_column, content_column, embedding_column]
         configs.extend(column_configs)
@@ -290,7 +303,7 @@ class SpannerVectorStore(VectorStore):
 
                 # Add nullable constraint if specified
                 if not column_config.is_null:
-                   column_sql += " NOT NULL"
+                    column_sql += " NOT NULL"
 
                 # Add a comma and a newline for the next column
                 column_sql += ",\n"
@@ -298,7 +311,7 @@ class SpannerVectorStore(VectorStore):
 
         # Remove the last comma and newline, add closing parenthesis
         if dialect == DatabaseDialect.POSTGRESQL:
-             sql +=  "  PRIMARY KEY(" + primary_key + ")\n)"
+            sql += "  PRIMARY KEY(" + primary_key + ")\n)"
         else:
             sql = sql.rstrip(",\n") + "\n) PRIMARY KEY(" + primary_key + ")"
 
@@ -348,9 +361,10 @@ class SpannerVectorStore(VectorStore):
         self._query_parameters = query_parameters
         self._embedding_service = embedding_service
 
-
         if metadata_columns is not None and ignore_metadata_columns is not None:
-            raise Exception("Either opt-In and pass metadata_column or opt-out and pass ignore_metadata_columns.")
+            raise Exception(
+                "Either opt-In and pass metadata_column or opt-out and pass ignore_metadata_columns."
+            )
 
         instance = self._client.instance(instance_id)
 
@@ -361,39 +375,46 @@ class SpannerVectorStore(VectorStore):
 
         self._database.reload()
 
-        self._dialect_semantics: DialectSemantics = GoogleSqlSemnatics();
+        self._dialect_semantics: DialectSemantics = GoogleSqlSemnatics()
         types = self.GSQL_TYPES
 
         if self._database.database_dialect == DatabaseDialect.POSTGRESQL:
-               self._dialect_semantics = PGSqlSemnatics();
-               types = self.PGSQL_TYPES
+            self._dialect_semantics = PGSqlSemnatics()
+            types = self.PGSQL_TYPES
 
         if not self._database.exists():
             raise Exception("Database with id-{} doesn't exist.".format(database_id))
-
 
         table = self._database.table(table_name)
 
         if not table.exists():
             raise Exception("Table with name-{} doesn't exist.".format(table_name))
 
-
         column_type_map = self._get_column_type_map(self._database, table_name)
 
         default_columns = [id_column, content_column, embedding_column]
 
-        columns_to_insert  = [] + default_columns
+        columns_to_insert = [] + default_columns
 
         if ignore_metadata_columns is not None:
-            columns_to_insert = [element for element in column_type_map.keys() if element not in ignore_metadata_columns]
-            self._metadata_columns = [item for item in columns_to_insert if item not in default_columns]
+            columns_to_insert = [
+                element
+                for element in column_type_map.keys()
+                if element not in ignore_metadata_columns
+            ]
+            self._metadata_columns = [
+                item for item in columns_to_insert if item not in default_columns
+            ]
         else:
             self._metadata_columns = []
             if metadata_columns is not None:
                 columns_to_insert.extend(metadata_columns)
                 self._metadata_columns.extend(metadata_columns)
 
-            if metadata_json_column is not None and metadata_json_column not in columns_to_insert:
+            if (
+                metadata_json_column is not None
+                and metadata_json_column not in columns_to_insert
+            ):
                 columns_to_insert.append(metadata_json_column)
                 self._metadata_columns.append(metadata_json_column)
 
@@ -407,7 +428,8 @@ class SpannerVectorStore(VectorStore):
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_NAME = {table_name}
         """.format(
-            table_name= "'" + table_name + "'")
+            table_name="'" + table_name + "'"
+        )
 
         with database.snapshot() as snapshot:
             results = snapshot.execute_sql(query)
@@ -420,38 +442,63 @@ class SpannerVectorStore(VectorStore):
 
     def _validate_table_schema(self, column_type_map, types):
         if not all(key in column_type_map for key in self._columns_to_insert):
-            raise Exception("One or more columns from list not present in table: {} ", self._columns_to_insert)
-
+            raise Exception(
+                "One or more columns from list not present in table: {} ",
+                self._columns_to_insert,
+            )
 
         content_column_type = column_type_map[self._content_column][1]
-        if not any(substring.lower() in content_column_type.lower() for substring in types[CONTENT_COLUMN_NAME]):
-             raise Exception("Content Column is not of correct type. Expected one of: {} but found: {}", types[CONTENT_COLUMN_NAME], content_column_type)
+        if not any(
+            substring.lower() in content_column_type.lower()
+            for substring in types[CONTENT_COLUMN_NAME]
+        ):
+            raise Exception(
+                "Content Column is not of correct type. Expected one of: {} but found: {}",
+                types[CONTENT_COLUMN_NAME],
+                content_column_type,
+            )
 
         embedding_column_type = column_type_map[self._embedding_column][1]
-        if not any(substring.lower() in embedding_column_type.lower() for substring in types[EMBEDDING_COLUMN_NAME]):
-             raise Exception("Embedding Column is not of correct type. Expected one of: {} but found: {}", types[EMBEDDING_COLUMN_NAME], embedding_column_type)
-
+        if not any(
+            substring.lower() in embedding_column_type.lower()
+            for substring in types[EMBEDDING_COLUMN_NAME]
+        ):
+            raise Exception(
+                "Embedding Column is not of correct type. Expected one of: {} but found: {}",
+                types[EMBEDDING_COLUMN_NAME],
+                embedding_column_type,
+            )
 
         if self._metadata_json_column is not None:
             metadata_json_column_type = column_type_map[self._metadata_json_column][1]
-            allowed_types = types['metadata_json_column']
-            if not any(substring.lower() in metadata_json_column_type.lower() for substring in allowed_types):
-                raise Exception("Embedding Column is not of correct type. Expected one of: {} but found: {}", allowed_types, embedding_column_type)
+            allowed_types = types["metadata_json_column"]
+            if not any(
+                substring.lower() in metadata_json_column_type.lower()
+                for substring in allowed_types
+            ):
+                raise Exception(
+                    "Embedding Column is not of correct type. Expected one of: {} but found: {}",
+                    allowed_types,
+                    embedding_column_type,
+                )
 
         for column_name, column_config in column_type_map.items():
             if column_name not in self._columns_to_insert:
                 if "NO" == column_config[2].upper():
-                    raise Exception("Found not nullable constraint on column: {}.",column_name)
-
+                    raise Exception(
+                        "Found not nullable constraint on column: {}.", column_name
+                    )
 
     def _select_relevance_score_fn(self) -> Callable[[float], float]:
-            if self._query_parameters.distance_strategy == DistanceStrategy.COSINE:
-                 return self._cosine_relevance_score_fn
-            elif self._query_parameters.distance_strategy == DistanceStrategy.EUCLIDEIAN:
-                return self._euclidean_relevance_score_fn
-            else:
-                raise Exception("Unknown distance strategy: {}, must be cosine or euclidean.", self._query_parameters.distance_strategy)
-
+        if self._query_parameters.distance_strategy == DistanceStrategy.COSINE:
+            return self._cosine_relevance_score_fn
+        elif self._query_parameters.distance_strategy == DistanceStrategy.EUCLIDEIAN:
+            return self._euclidean_relevance_score_fn
+        else:
+            raise Exception(
+                "Unknown distance strategy: {}, must be cosine or euclidean.",
+                self._query_parameters.distance_strategy,
+            )
 
     def add_texts(
         self,
@@ -495,7 +542,7 @@ class SpannerVectorStore(VectorStore):
         if metadatas:
             for row_metadata in metadatas:
                 if self._metadata_json_column is not None:
-                    row_metadata[self._metadata_json_column] =  JsonObject(row_metadata)
+                    row_metadata[self._metadata_json_column] = JsonObject(row_metadata)
 
                 for column_name in self._metadata_columns:
                     if row_metadata.get(column_name) is not None:
@@ -509,8 +556,7 @@ class SpannerVectorStore(VectorStore):
         values_dict[self._content_column] = texts
         values_dict[self._embedding_column] = embeds
 
-
-        columns_to_insert = values_dict.keys();
+        columns_to_insert = values_dict.keys()
 
         rows_to_insert = [
             [values_dict[key][i] for key in values_dict]
@@ -564,19 +610,19 @@ class SpannerVectorStore(VectorStore):
         Returns:
             Optional[bool]: True if deletion is successful, False otherwise, None if not implemented.
         """
-        if (ids is None and documents is None):
-             raise Exception("Pass id/documents to delete")
+        if ids is None and documents is None:
+            raise Exception("Pass id/documents to delete")
 
         columns = []
         values: List[Any] = []
 
         if ids is not None:
             columns = [self._id_column]
-            values = ['(\'' + value + '\')' for value in ids]
+            values = ["('" + value + "')" for value in ids]
         elif documents is not None:
             columns = [self._content_column] + self._metadata_columns
 
-            if (self._metadata_json_column is not None):
+            if self._metadata_json_column is not None:
                 columns.remove(self._metadata_json_column)
 
             for doc in documents:
@@ -584,20 +630,20 @@ class SpannerVectorStore(VectorStore):
                 value.append(doc.page_content)
 
                 for column_name in columns:
-                    if (column_name != self._content_column):
+                    if column_name != self._content_column:
                         value.append(doc.metadata.get(column_name))
 
                 values.append(value)
 
-
         def delete_records(transaction):
             # ToDo: Debug why not working
             base_delete_statement = "DELETE FROM {} WHERE ".format(self._table_name)
-            column_expression =  "(" + ','.join(columns) + ") = " + "$1"
+            column_expression = "(" + ",".join(columns) + ") = " + "$1"
 
             record_type = param_types.Struct(
                 [
-                    param_types.StructField(column, param_types.STRING) for column in columns
+                    param_types.StructField(column, param_types.STRING)
+                    for column in columns
                 ]
             )
 
@@ -613,18 +659,23 @@ class SpannerVectorStore(VectorStore):
                 print("Params:", values_tuple_param)
 
                 results = transaction.execute_update(
-                    dml=sql_delete,  params={"p1": values_tuple_param},
+                    dml=sql_delete,
+                    params={"p1": values_tuple_param},
                     param_types={"p1": record_type},
                 )
 
-                print (results)
+                print(results)
 
         self._database.run_in_transaction(delete_records)
 
         return True
 
     def similarity_search_with_score_by_vector(
-        self, embedding: List[float], k: int = 4, pre_filter: Optional[str] = None, **kwargs: Any
+        self,
+        embedding: List[float],
+        k: int = 4,
+        pre_filter: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """
         Perform similarity search for a given query.
@@ -638,12 +689,21 @@ class SpannerVectorStore(VectorStore):
             List[Document]: List of documents most similar to the query.
         """
 
-        results, column_order_map = self._get_rows_by_similarity_search(embedding, k, pre_filter)
-        documents = self._get_documents_from_query_results(list(results), column_order_map)
+        results, column_order_map = self._get_rows_by_similarity_search(
+            embedding, k, pre_filter
+        )
+        documents = self._get_documents_from_query_results(
+            list(results), column_order_map
+        )
         return documents
 
-
-    def _get_rows_by_similarity_search(self, embedding: List[float], k: int, pre_filter: Optional[str] = None, **kwargs: Any):
+    def _get_rows_by_similarity_search(
+        self,
+        embedding: List[float],
+        k: int,
+        pre_filter: Optional[str] = None,
+        **kwargs: Any,
+    ):
         staleness = self._query_parameters.staleness
         staleness = datetime.timedelta(seconds=staleness)
 
@@ -653,13 +713,14 @@ class SpannerVectorStore(VectorStore):
 
         parameter = ("@vector_embedding", "vector_embedding")
 
-        if (self._database.database_dialect == DatabaseDialect.POSTGRESQL):
-             parameter = ("$1", "p1")
+        if self._database.database_dialect == DatabaseDialect.POSTGRESQL:
+            parameter = ("$1", "p1")
 
         select_column_names = ",".join(self._columns_to_insert) + ","
-        column_order_map = {value: index for index, value in enumerate(self._columns_to_insert)}
+        column_order_map = {
+            value: index for index, value in enumerate(self._columns_to_insert)
+        }
         column_order_map[KNN_DISTANCE_SEARCH_QUERY_ALIAS] = len(self._columns_to_insert)
-
 
         sql_query = """
             SELECT {select_column_names} {distance_function}({embedding_column}, {vector_embedding_placeholder}) AS {distance_alias}
@@ -682,21 +743,23 @@ class SpannerVectorStore(VectorStore):
             results = snapshot.execute_sql(
                 sql=sql_query,
                 params={parameter[1]: embedding},
-                param_types={
-                   parameter[1]: param_types.Array(param_types.FLOAT64)
-                },
+                param_types={parameter[1]: param_types.Array(param_types.FLOAT64)},
             )
 
             return list(results), column_order_map
 
-
-    def _get_documents_from_query_results(self, results: List[List], column_order_map: Dict[str, int]) -> List[Tuple[Document, float]]:
+    def _get_documents_from_query_results(
+        self, results: List[List], column_order_map: Dict[str, int]
+    ) -> List[Tuple[Document, float]]:
         documents = []
 
         for row in results:
             page_content = row[column_order_map[self._content_column]]
 
-            if self._metadata_json_column is not None and row[column_order_map[self._metadata_json_column]]:
+            if (
+                self._metadata_json_column is not None
+                and row[column_order_map[self._metadata_json_column]]
+            ):
                 metadata = row[column_order_map[self._metadata_json_column]]
             else:
                 metadata = {
@@ -706,10 +769,11 @@ class SpannerVectorStore(VectorStore):
                 }
 
             doc = Document(page_content=page_content, metadata=metadata)
-            documents.append((doc, row[column_order_map[KNN_DISTANCE_SEARCH_QUERY_ALIAS]]))
+            documents.append(
+                (doc, row[column_order_map[KNN_DISTANCE_SEARCH_QUERY_ALIAS]])
+            )
 
         return documents
-
 
     def similarity_search(
         self, query: str, k: int = 4, pre_filter: Optional[str] = None, **kwargs: Any
@@ -727,7 +791,7 @@ class SpannerVectorStore(VectorStore):
         """
         embedding = self._embedding_service.embed_query(query)
         documents = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, pre_filter = pre_filter
+            embedding=embedding, k=k, pre_filter=pre_filter
         )
         return [doc for doc, _ in documents]
 
@@ -747,12 +811,16 @@ class SpannerVectorStore(VectorStore):
         """
         embedding = self._embedding_service.embed_query(query)
         documents = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, pre_filter = pre_filter
+            embedding=embedding, k=k, pre_filter=pre_filter
         )
         return documents
 
     def similarity_search_by_vector(
-        self, embedding: List[float], k: int = 4, pre_filter: Optional[str] = None, **kwargs: Any
+        self,
+        embedding: List[float],
+        k: int = 4,
+        pre_filter: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """
         Perform similarity search by vector.
@@ -766,10 +834,9 @@ class SpannerVectorStore(VectorStore):
             List[Document]: List of documents most similar to the query.
         """
         documents = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, pre_filter = pre_filter
+            embedding=embedding, k=k, pre_filter=pre_filter
         )
         return [doc for doc, _ in documents]
-
 
     def max_marginal_relevance_search_with_score_by_vector(
         self,
@@ -798,10 +865,13 @@ class SpannerVectorStore(VectorStore):
             List of Documents and similarity scores selected by maximal marginal
                 relevance and score for each.
         """
-        results, column_order_map = self._get_rows_by_similarity_search(embedding, fetch_k, pre_filter)
+        results, column_order_map = self._get_rows_by_similarity_search(
+            embedding, fetch_k, pre_filter
+        )
 
-        embeddings = [result[column_order_map[self._embedding_column]] for result in results]
-
+        embeddings = [
+            result[column_order_map[self._embedding_column]] for result in results
+        ]
 
         mmr_selected = maximal_marginal_relevance(
             np.array([embedding], dtype=np.float32),
@@ -811,7 +881,9 @@ class SpannerVectorStore(VectorStore):
         )
 
         search_results = [results[i] for i in mmr_selected]
-        documents_with_scores = self._get_documents_from_query_results(list(search_results), column_order_map)
+        documents_with_scores = self._get_documents_from_query_results(
+            list(search_results), column_order_map
+        )
 
         return documents_with_scores
 
@@ -840,39 +912,42 @@ class SpannerVectorStore(VectorStore):
         Returns:
             List of Documents selected by maximal marginal relevance.
         """
-        documents_with_scores = self.max_marginal_relevance_search_with_score_by_vector(embedding, k, fetch_k, lambda_mult, pre_filter)
+        documents_with_scores = self.max_marginal_relevance_search_with_score_by_vector(
+            embedding, k, fetch_k, lambda_mult, pre_filter
+        )
 
         return [doc for doc, _ in documents_with_scores]
 
     def max_marginal_relevance_search(
-            self,
-            query: str,
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            pre_filter: Optional[str] = None,
-            **kwargs: Any,
-        ) -> List[Document]:
-            """Return docs selected using the maximal marginal relevance.
+        self,
+        query: str,
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        pre_filter: Optional[str] = None,
+        **kwargs: Any,
+    ) -> List[Document]:
+        """Return docs selected using the maximal marginal relevance.
 
-            Maximal marginal relevance optimizes for similarity to query AND diversity
-            among selected documents.
+        Maximal marginal relevance optimizes for similarity to query AND diversity
+        among selected documents.
 
-            Args:
-                query: Text to look up documents similar to.
-                k: Number of Documents to return. Defaults to 4.
-                fetch_k: Number of Documents to fetch to pass to MMR algorithm.
-                lambda_mult: Number between 0 and 1 that determines the degree
-                            of diversity among the results with 0 corresponding
-                            to maximum diversity and 1 to minimum diversity.
-                            Defaults to 0.5.
-            Returns:
-                List of Documents selected by maximal marginal relevance.
-            """
-            embedding = self._embedding_service.embed_query(query)
-            documents = self.max_marginal_relevance_search_by_vector(embedding, k, fetch_k, lambda_mult, pre_filter)
-            return documents
-
+        Args:
+            query: Text to look up documents similar to.
+            k: Number of Documents to return. Defaults to 4.
+            fetch_k: Number of Documents to fetch to pass to MMR algorithm.
+            lambda_mult: Number between 0 and 1 that determines the degree
+                        of diversity among the results with 0 corresponding
+                        to maximum diversity and 1 to minimum diversity.
+                        Defaults to 0.5.
+        Returns:
+            List of Documents selected by maximal marginal relevance.
+        """
+        embedding = self._embedding_service.embed_query(query)
+        documents = self.max_marginal_relevance_search_by_vector(
+            embedding, k, fetch_k, lambda_mult, pre_filter
+        )
+        return documents
 
     @classmethod
     def from_documents(
