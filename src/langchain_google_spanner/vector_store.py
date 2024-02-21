@@ -14,39 +14,38 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
-import warnings
-import uuid
-import datetime
 import re
+import uuid
+import warnings
+from abc import ABC, abstractmethod
+from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Dict,
     Iterable,
     List,
-    Dict,
     Optional,
     Tuple,
     Type,
+    Union,
 )
-from typing import Union
-from google.cloud.spanner_v1 import param_types
-from google.cloud.spanner_v1 import JsonObject
+
+import numpy as np
+from google.cloud import spanner  # type: ignore
+from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
+from google.cloud.spanner_v1 import JsonObject, param_types
+from google.cloud.spanner_v1.streamed import StreamedResultSet
+from langchain_community.vectorstores.utils import maximal_marginal_relevance
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from google.cloud import spanner
-from google.cloud.spanner import Client
-from google.cloud.spanner_v1.streamed import StreamedResultSet
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
-from enum import Enum
-import numpy as np
-from abc import ABC, abstractmethod
-from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
-from langchain_community.vectorstores.utils import maximal_marginal_relevance
-from google.cloud.spanner_v1 import Type
+
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -294,7 +293,7 @@ class SpannerVectorStore(VectorStore):
         instance_id: str,
         database_id: str,
         table_name: str,
-        client: Client = Client(),
+        client: spanner.Client = spanner.Client(),
         id_column: Union[str, TableColumn] = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
@@ -464,7 +463,7 @@ class SpannerVectorStore(VectorStore):
         id_column: str = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
-        client: Client = Client(),
+        client: spanner.Client = spanner.Client(),
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
@@ -792,9 +791,10 @@ class SpannerVectorStore(VectorStore):
             # ToDo: Debug why not working
             base_delete_statement = "DELETE FROM {} WHERE ".format(self._table_name)
 
-            where_clause, param_types_map = (
-                self._dialect_semantics.getDeleteDocumentsParameters(columns)
-            )
+            (
+                where_clause,
+                param_types_map,
+            ) = self._dialect_semantics.getDeleteDocumentsParameters(columns)
 
             # Concatenate the conditions with the base DELETE statement
             sql_delete = base_delete_statement + where_clause
@@ -1114,7 +1114,7 @@ class SpannerVectorStore(VectorStore):
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
         ids: Optional[List[str]] = None,
-        client: Client = Client(),
+        client: spanner.Client = spanner.Client(),
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
@@ -1175,7 +1175,7 @@ class SpannerVectorStore(VectorStore):
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
         ids: Optional[List[str]] = None,
-        client: Client = Client(),
+        client: spanner.Client = spanner.Client(),
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
