@@ -47,18 +47,33 @@ from abc import ABC, abstractmethod
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from langchain_community.vectorstores.utils import maximal_marginal_relevance
 from google.cloud.spanner_v1 import Type
+from .version import __version__
 
 logger = logging.getLogger(__name__)
-
 
 ID_COLUMN_NAME = "langchain_id"
 CONTENT_COLUMN_NAME = "content"
 EMBEDDING_COLUMN_NAME = "embedding"
 ADDITIONAL_METADATA_COLUMN_NAME = "metadata"
+
+USER_AGENT_VECTOR_STORE = "langchain-google-spanner-python:vector_store" + __version__
+
 KNN_DISTANCE_SEARCH_QUERY_ALIAS = "distance"
 
 from dataclasses import dataclass
 
+
+def client_with_user_agent(
+    client: Optional[spanner.Client], user_agent: str
+) -> spanner.Client:
+    if not client:
+        client = spanner.Client()
+    client_agent = client._client_info.user_agent
+    if not client_agent:
+        client._client_info.user_agent = user_agent
+    elif user_agent not in client_agent:
+        client._client_info.user_agent = " ".join([client_agent, user_agent])
+    return client
 
 @dataclass
 class TableColumn:
@@ -474,7 +489,7 @@ class SpannerVectorStore(VectorStore):
         self._instance_id = instance_id
         self._database_id = database_id
         self._table_name = table_name
-        self._client = client
+        self._client = client_with_user_agent(client, USER_AGENT_VECTOR_STORE)
         self._id_column = id_column
         self._content_column = content_column
         self._embedding_column = embedding_column
