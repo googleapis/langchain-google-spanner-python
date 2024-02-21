@@ -83,6 +83,7 @@ class TableColumn:
         if self.type is None:
             raise ValueError("type is mandatory and cannot be None.")
 
+
 @dataclass
 class SecondaryIndex:
     index_name: str
@@ -123,16 +124,21 @@ class DialectSemantics(ABC):
         Returns:
         - str: The name of the distance function.
         """
-        raise NotImplementedError("getDistanceFunction method must be implemented by subclass.")
-
+        raise NotImplementedError(
+            "getDistanceFunction method must be implemented by subclass."
+        )
 
     @abstractmethod
     def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
-        raise NotImplementedError("getDeleteDocumentsParameters method must be implemented by subclass.")
+        raise NotImplementedError(
+            "getDeleteDocumentsParameters method must be implemented by subclass."
+        )
 
     @abstractmethod
     def getDeleteDocumentsValueParameters(self, columns, values) -> Dict[str, Any]:
-        raise NotImplementedError("getDeleteDocumentsValueParameters method must be implemented by subclass.")
+        raise NotImplementedError(
+            "getDeleteDocumentsValueParameters method must be implemented by subclass."
+        )
 
 
 class GoogleSqlSemnatics(DialectSemantics):
@@ -147,9 +153,11 @@ class GoogleSqlSemnatics(DialectSemantics):
         return "EUCLIDEAN_DISTANCE"
 
     def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
-        where_clause_condition = " AND ".join(["{} = @{}".format(column, column) for column in columns])
+        where_clause_condition = " AND ".join(
+            ["{} = @{}".format(column, column) for column in columns]
+        )
 
-        param_types_dict =  {column: param_types.STRING for column in columns}
+        param_types_dict = {column: param_types.STRING for column in columns}
 
         return where_clause_condition, param_types_dict
 
@@ -168,18 +176,29 @@ class PGSqlSemnatics(DialectSemantics):
         return "spanner.euclidean_distance"
 
     def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
-        where_clause_condition = " AND ".join(["{} = ${}".format(column, index + 1) for index, column in enumerate(columns)])
+        where_clause_condition = " AND ".join(
+            [
+                "{} = ${}".format(column, index + 1)
+                for index, column in enumerate(columns)
+            ]
+        )
 
-        value_placeholder_list = ["p{}".format(index + 1) for index in range(len(columns))]
+        value_placeholder_list = [
+            "p{}".format(index + 1) for index in range(len(columns))
+        ]
 
-        param_types_dict =  {value_placeholder: param_types.STRING for value_placeholder in value_placeholder_list}
+        param_types_dict = {
+            value_placeholder: param_types.STRING
+            for value_placeholder in value_placeholder_list
+        }
 
         return where_clause_condition, param_types_dict
 
     def getDeleteDocumentsValueParameters(self, columns, values) -> Dict[str, Any]:
-        value_placeholder_list = ["p{}".format(index + 1) for index in range(len(columns))]
+        value_placeholder_list = [
+            "p{}".format(index + 1) for index in range(len(columns))
+        ]
         return dict(zip(value_placeholder_list, values))
-
 
 
 class QueryParameters:
@@ -303,7 +322,7 @@ class SpannerVectorStore(VectorStore):
             embedding_column,
             metadata_columns,
             primary_key,
-            secondary_indexes
+            secondary_indexes,
         )
 
         operation = database.update_ddl(ddl)
@@ -388,33 +407,37 @@ class SpannerVectorStore(VectorStore):
         if dialect == DatabaseDialect.POSTGRESQL:
             create_table_statement += "  PRIMARY KEY(" + primary_key + ")\n)"
         else:
-            create_table_statement = create_table_statement.rstrip(",\n") + "\n) PRIMARY KEY(" + primary_key + ")"
-
+            create_table_statement = (
+                create_table_statement.rstrip(",\n")
+                + "\n) PRIMARY KEY("
+                + primary_key
+                + ")"
+            )
 
         secondary_index_ddl_statements = []
 
         if secondary_indexes is not None:
             for secondary_index in secondary_indexes:
-                statement = f"CREATE INDEX {secondary_index.index_name} ON {table_name}("
-                statement =  statement + ",".join(secondary_index.columns) + ")  "
+                statement = (
+                    f"CREATE INDEX {secondary_index.index_name} ON {table_name}("
+                )
+                statement = statement + ",".join(secondary_index.columns) + ")  "
 
                 if dialect == DatabaseDialect.POSTGRESQL:
                     statement = statement + "INCLUDE ("
                 else:
-                     statement = statement + "STORING ("
+                    statement = statement + "STORING ("
 
                 if secondary_index.storing_columns is None:
                     secondary_index.storing_columns = [embedding_column.name]
                 elif embedding_column not in secondary_index.storing_columns:
                     secondary_index.storing_columns.append(embedding_column.name)
 
-                statement =  statement + ",".join(secondary_index.storing_columns) + ")"
+                statement = statement + ",".join(secondary_index.storing_columns) + ")"
 
                 secondary_index_ddl_statements.append(statement)
 
-
         return [create_table_statement] + secondary_index_ddl_statements
-
 
     def __init__(
         self,
@@ -550,8 +573,10 @@ class SpannerVectorStore(VectorStore):
         if not all(key in column_type_map for key in default_columns):
             raise Exception(
                 "One or more columns from the {}, {}, {} are not present in table. Please validate schema.",
-                self._id_column, self._content_column, self._embedding_column
-        )
+                self._id_column,
+                self._content_column,
+                self._embedding_column,
+            )
 
         content_column_type = column_type_map[self._content_column][1]
         if not any(
@@ -749,7 +774,9 @@ class SpannerVectorStore(VectorStore):
             # ToDo: Debug why not working
             base_delete_statement = "DELETE FROM {} WHERE ".format(self._table_name)
 
-            where_clause, param_types_map = self._dialect_semantics.getDeleteDocumentsParameters(columns)
+            where_clause, param_types_map = (
+                self._dialect_semantics.getDeleteDocumentsParameters(columns)
+            )
 
             # Concatenate the conditions with the base DELETE statement
             sql_delete = base_delete_statement + where_clause
@@ -758,7 +785,11 @@ class SpannerVectorStore(VectorStore):
             delete_row_count = 0
             for value_tuple in values:
                 # Construct the params dictionary
-                values_tuple_param = self._dialect_semantics.getDeleteDocumentsValueParameters(columns, value_tuple)
+                values_tuple_param = (
+                    self._dialect_semantics.getDeleteDocumentsValueParameters(
+                        columns, value_tuple
+                    )
+                )
 
                 count = transaction.execute_update(
                     dml=sql_delete,
@@ -768,7 +799,6 @@ class SpannerVectorStore(VectorStore):
 
                 delete_row_count = delete_row_count + count
 
-            print (delete_row_count)
 
         self._database.run_in_transaction(delete_records)
 
@@ -842,7 +872,9 @@ class SpannerVectorStore(VectorStore):
             distance_alias=KNN_DISTANCE_SEARCH_QUERY_ALIAS,
         )
 
-        with self._database.snapshot(**staleness if staleness is not None else {}) as snapshot:
+        with self._database.snapshot(
+            **staleness if staleness is not None else {}
+        ) as snapshot:
             results = snapshot.execute_sql(
                 sql=sql_query,
                 params={parameter[1]: embedding},
