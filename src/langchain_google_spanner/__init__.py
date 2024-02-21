@@ -18,7 +18,7 @@ from langchain_google_spanner.vector_store import (
     TableColumn,
     SecondaryIndex,
     QueryParameters,
-    DistanceStrategy
+    DistanceStrategy,
 )
 
 __all__ = [
@@ -27,5 +27,5 @@ __all__ = [
     "TableColumn",
     "SecondaryIndex",
     "QueryParameters",
-    "DistanceStrategy"
+    "DistanceStrategy",
 ]
