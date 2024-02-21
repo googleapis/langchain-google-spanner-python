@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_google_spanner.vector_store import SpannerVectorStore, TableColumn, SecondaryIndex
+from langchain_google_spanner.vector_store import SpannerVectorStore, TableColumn, SecondaryIndex, DistanceStrategy
 
-__all__ = ["SpannerVectorStore", "TableColumn", "SecondaryIndex"]
+__all__ = ["SpannerVectorStore", "TableColumn", "SecondaryIndex", "QueryParameters", "DistanceStrategy"]
