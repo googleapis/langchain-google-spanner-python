@@ -17,7 +17,13 @@ from langchain_google_spanner.vector_store import (
     SpannerVectorStore,
     TableColumn,
     SecondaryIndex,
-    QueryParameters
+    QueryParameters,
 )
 
-__all__ = ["__version__", "SpannerVectorStore", "TableColumn", "SecondaryIndex", "QueryParameters"]
+__all__ = [
+    "__version__",
+    "SpannerVectorStore",
+    "TableColumn",
+    "SecondaryIndex",
+    "QueryParameters",
+]

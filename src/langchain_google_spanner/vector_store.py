@@ -75,6 +75,7 @@ def client_with_user_agent(
         client._client_info.user_agent = " ".join([client_agent, user_agent])
     return client
 
+
 @dataclass
 class TableColumn:
     """
@@ -814,7 +815,6 @@ class SpannerVectorStore(VectorStore):
 
                 delete_row_count = delete_row_count + count
 
-
         self._database.run_in_transaction(delete_records)
 
         return True
@@ -1100,10 +1100,13 @@ class SpannerVectorStore(VectorStore):
         return documents
 
     @classmethod
-    def from_documents(
+    def from_documents(  # type: ignore[override]
         cls: Type[SpannerVectorStore],
         documents: List[Document],
         embedding: Embeddings,
+        instance_id: str,
+        database_id: str,
+        table_name: str,
         id_column: str = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
@@ -1141,6 +1144,9 @@ class SpannerVectorStore(VectorStore):
             embedding,
             metadatas=metadatas,
             embedding_service=embedding,
+            instance_id=instance_id,
+            database_id=database_id,
+            table_name=table_name,
             id_column=id_column,
             content_column=content_column,
             embedding_column=embedding_column,
@@ -1154,10 +1160,13 @@ class SpannerVectorStore(VectorStore):
         )
 
     @classmethod
-    def from_texts(
+    def from_texts(  # type: ignore[override]
         cls: Type[SpannerVectorStore],
         texts: List[str],
         embedding: Embeddings,
+        instance_id: str,
+        database_id: str,
+        table_name: str,
         metadatas: Optional[List[dict]] = None,
         id_column: str = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
@@ -1190,24 +1199,6 @@ class SpannerVectorStore(VectorStore):
         Returns:
             SpannerVectorStore: Initialized SpannerVectorStore instance.
         """
-        instance_id = get_from_dict_or_env(
-            data=kwargs,
-            key="instance_id",
-            env_key="SPANNER_INSTANCE_ID",
-        )
-
-        database_id = get_from_dict_or_env(
-            data=kwargs,
-            key="database_id",
-            env_key="SPANNER_DATABASE_ID",
-        )
-
-        table_name = get_from_dict_or_env(
-            data=kwargs,
-            key="table_name",
-            env_key="SPANNER_TABLE_NAME",
-        )
-
         store = cls(
             instance_id=instance_id,
             database_id=database_id,
