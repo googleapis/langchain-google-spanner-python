@@ -14,39 +14,39 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
-import warnings
-import uuid
-import datetime
 import re
+import uuid
+import warnings
+from abc import ABC, abstractmethod
+from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Dict,
     Iterable,
     List,
-    Dict,
     Optional,
     Tuple,
     Type,
+    Union,
 )
-from typing import Union
-from google.cloud.spanner_v1 import param_types
-from google.cloud.spanner_v1 import JsonObject
-from langchain_core.documents import Document
-from langchain_core.embeddings import Embeddings
+
+import numpy as np
 from google.cloud import spanner
 from google.cloud.spanner import Client
+from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
+from google.cloud.spanner_v1 import JsonObject, Type, param_types
 from google.cloud.spanner_v1.streamed import StreamedResultSet
+from langchain_community.vectorstores.utils import maximal_marginal_relevance
+from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
-from enum import Enum
-import numpy as np
-from abc import ABC, abstractmethod
-from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
-from langchain_community.vectorstores.utils import maximal_marginal_relevance
-from google.cloud.spanner_v1 import Type
+
 from .version import __version__
 
 logger = logging.getLogger(__name__)
