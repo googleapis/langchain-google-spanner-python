@@ -16,7 +16,7 @@ import pytest
 import os
 from google.cloud.spanner import Client, KeySet  # type: ignore
 
-from langchain_google_spanner.vector_store import ( # type: ignore
+from langchain_google_spanner.vector_store import (  # type: ignore
     SpannerVectorStore,
     TableColumn,
     SecondaryIndex,
