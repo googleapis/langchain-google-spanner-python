@@ -24,10 +24,27 @@ from google.cloud.spanner_v1.data_types import JsonObject
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, messages_from_dict
 
+from .version import __version__
+
+USER_AGENT_CHAT = "langchain-google-spanner-python:chat_history" + __version__
+
 OPERATION_TIMEOUT_SECONDS = 240
 
 COLUMN_FAMILY = "langchain"
 COLUMN_NAME = "history"
+
+
+def client_with_user_agent(
+    client: Optional[spanner.Client], user_agent: str
+) -> spanner.Client:
+    if not client:
+        client = spanner.Client()
+    client_agent = client._client_info.user_agent
+    if not client_agent:
+        client._client_info.user_agent = user_agent
+    elif user_agent not in client_agent:
+        client._client_info.user_agent = " ".join([client_agent, user_agent])
+    return client
 
 
 class SpannerChatMessageHistory(BaseChatMessageHistory):
@@ -52,7 +69,7 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
         self.database_id = database_id
         self.session_id = session_id
         self.table_name = table_name
-        self.client = client or spanner.Client()
+        self.client = client_with_user_agent(client, USER_AGENT_CHAT)
         self.instance = self.client.instance(instance_id)
         if not self.instance.exists():
             raise Exception("Instance doesn't exist.")
