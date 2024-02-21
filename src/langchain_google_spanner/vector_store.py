@@ -36,10 +36,9 @@ from typing import (
 )
 
 import numpy as np
-from google.cloud import spanner
-from google.cloud.spanner import Client
+from google.cloud import spanner  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
-from google.cloud.spanner_v1 import JsonObject, Type, param_types
+from google.cloud.spanner_v1 import JsonObject, param_types
 from google.cloud.spanner_v1.streamed import StreamedResultSet
 from langchain_community.vectorstores.utils import maximal_marginal_relevance
 from langchain_core.documents import Document
@@ -294,7 +293,7 @@ class SpannerVectorStore(VectorStore):
         instance_id: str,
         database_id: str,
         table_name: str,
-        client: Client = Client(),
+        client: spanner.Client = spanner.Client(),
         id_column: Union[str, TableColumn] = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
@@ -464,7 +463,7 @@ class SpannerVectorStore(VectorStore):
         id_column: str = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
-        client: Client = Client(),
+        client: spanner.Client = spanner.Client(),
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
@@ -1112,7 +1111,7 @@ class SpannerVectorStore(VectorStore):
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
         ids: Optional[List[str]] = None,
-        client: Client = Client(),
+        client: spanner.Client = spanner.Client(),
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
@@ -1173,7 +1172,7 @@ class SpannerVectorStore(VectorStore):
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
         ids: Optional[List[str]] = None,
-        client: Client = Client(),
+        client: spanner.Client = spanner.Client(),
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
