@@ -790,9 +790,10 @@ class SpannerVectorStore(VectorStore):
             # ToDo: Debug why not working
             base_delete_statement = "DELETE FROM {} WHERE ".format(self._table_name)
 
-            where_clause, param_types_map = (
-                self._dialect_semantics.getDeleteDocumentsParameters(columns)
-            )
+            (
+                where_clause,
+                param_types_map,
+            ) = self._dialect_semantics.getDeleteDocumentsParameters(columns)
 
             # Concatenate the conditions with the base DELETE statement
             sql_delete = base_delete_statement + where_clause
