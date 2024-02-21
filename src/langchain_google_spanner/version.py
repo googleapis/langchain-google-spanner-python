@@ -12,12 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .version import __version__
-from langchain_google_spanner.vector_store import (
-    SpannerVectorStore,
-    TableColumn,
-    SecondaryIndex,
-    QueryParameters
-)
-
-__all__ = ["__version__", "SpannerVectorStore", "TableColumn", "SecondaryIndex", "QueryParameters"]
+__version__ = "0.0.1"
