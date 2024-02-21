@@ -16,7 +16,7 @@ import pytest
 import os
 from google.cloud.spanner import Client, KeySet  # type: ignore
 
-from langchain_google_spanner.vector_store import (
+from langchain_google_spanner.vector_store import ( # type: ignore
     SpannerVectorStore,
     TableColumn,
     SecondaryIndex,
@@ -208,7 +208,7 @@ class TestStaticUtilityPGSQL:
 
 class TestSpannerVectorStoreGoogleSQL:
     @pytest.fixture(scope="class")
-    def setup_database(self, client):
+    def setup_database(self, client, cleanupGSQL):
         SpannerVectorStore.init_vector_store_table(
             instance_id=instance_id,
             database_id=google_database,
@@ -359,7 +359,7 @@ class TestSpannerVectorStoreGoogleSQL:
 
         assert len(docs) == 2
 
-    def test_spanner_vector_search_data3(self, setup_database):
+    def test_spanner_vector_search_data4(self, setup_database):
         loader, embeddings = setup_database
         db = SpannerVectorStore(
             instance_id=instance_id,
@@ -384,7 +384,7 @@ class TestSpannerVectorStoreGoogleSQL:
 
 class TestSpannerVectorStorePGSQL:
     @pytest.fixture(scope="class")
-    def setup_database(self, client):
+    def setup_database(self, client, cleanupPGSQL):
         SpannerVectorStore.init_vector_store_table(
             instance_id=instance_id,
             database_id=pg_database,
@@ -535,7 +535,7 @@ class TestSpannerVectorStorePGSQL:
 
         assert len(docs) == 2
 
-    def test_spanner_vector_search_data3(self, setup_database):
+    def test_spanner_vector_search_data4(self, setup_database):
         loader, embeddings = setup_database
         db = SpannerVectorStore(
             instance_id=instance_id,
