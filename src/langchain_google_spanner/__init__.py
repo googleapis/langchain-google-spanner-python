@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from langchain_google_spanner.vector_store import (
+    DistanceStrategy,
     QueryParameters,
     SecondaryIndex,
     SpannerVectorStore,
@@ -27,4 +28,5 @@ __all__ = [
     "TableColumn",
     "SecondaryIndex",
     "QueryParameters",
+    "DistanceStrategy",
 ]
