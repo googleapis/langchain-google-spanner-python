@@ -16,9 +16,9 @@ from langchain_google_spanner.vector_store import (
     DistanceStrategy,
     QueryParameters,
     SecondaryIndex,
+    SpannerChatMessageHistory,
     SpannerVectorStore,
     TableColumn,
-    SpannerChatMessageHistory,
 )
 
 from .version import __version__
