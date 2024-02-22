@@ -5,9 +5,13 @@ description = "LangChain integrations for Google Cloud Spanner"
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.8"
+authors = [
+    {name = "Google LLC", email = "googleapis-packages@google.com"}
+]
 dependencies = [
-    "langchain==0.1.1",
-    "google-cloud-spanner==3.41.0"
+    "langchain-core>=0.1.25, <1.0.0",
+    "langchain-community>=0.0.18, <1.0.0",
+    "google-cloud-spanner>=3.41.0, <4.0.0"
 ]
 
 [tool.setuptools.dynamic]
