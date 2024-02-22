@@ -785,10 +785,10 @@ class SpannerVectorStore(VectorStore):
 
                 values.append(value)
 
-        delete_row_count = 0
+        delete_row_count: int = 0
 
         def delete_records(transaction):
-            # ToDo: Debug why not working
+            nonlocal delete_row_count
             base_delete_statement = "DELETE FROM {} WHERE ".format(self._table_name)
 
             (

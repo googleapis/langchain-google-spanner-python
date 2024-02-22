@@ -13,11 +13,11 @@
 # limitations under the License.
 
 from langchain_google_spanner.vector_store import (
+    DistanceStrategy,
     QueryParameters,
     SecondaryIndex,
     SpannerVectorStore,
     TableColumn,
-    DistanceStrategy,
 )
 
 from .version import __version__

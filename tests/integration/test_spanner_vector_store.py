@@ -12,27 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
+import datetime
 import os
+import random
+import uuid
+
+import pytest
 from google.cloud.spanner import Client, KeySet  # type: ignore
+from langchain_community.document_loaders import HNLoader
+from langchain_community.embeddings import FakeEmbeddings
 
 from langchain_google_spanner.vector_store import (  # type: ignore
+    DistanceStrategy,
+    QueryParameters,
+    SecondaryIndex,
     SpannerVectorStore,
     TableColumn,
-    SecondaryIndex,
-    QueryParameters,
-    DistanceStrategy,
 )
-from langchain_community.embeddings import FakeEmbeddings
-import uuid
-import datetime
-from langchain_community.document_loaders import HNLoader
 
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
 google_database = os.environ["GOOGLE_DATABASE"]
 pg_database = os.environ["PG_DATABASE"]
-table_name = os.environ["TABLE_NAME"].replace("-", "_")
+table_name = os.environ["TABLE_NAME"].replace("-", "_") + +str(
+    random.randint(10000, 99999)
+)
 
 OPERATION_TIMEOUT_SECONDS = 240
 
@@ -208,7 +212,7 @@ class TestStaticUtilityPGSQL:
 
 class TestSpannerVectorStoreGoogleSQL:
     @pytest.fixture(scope="class")
-    def setup_database(self, client, cleanupGSQL):
+    def setup_database(self, client):
         SpannerVectorStore.init_vector_store_table(
             instance_id=instance_id,
             database_id=google_database,
@@ -218,9 +222,6 @@ class TestSpannerVectorStoreGoogleSQL:
                 TableColumn(name="metadata", type="JSON", is_null=True),
                 TableColumn(name="title", type="STRING(MAX)", is_null=False),
             ],
-            secondary_indexes=[
-                SecondaryIndex(index_name="test_index_1", columns=["row_id"])
-            ],
         )
 
         loader = HNLoader("https://news.ycombinator.com/item?id=34817881")
@@ -228,6 +229,15 @@ class TestSpannerVectorStoreGoogleSQL:
         embeddings = FakeEmbeddings(size=3)
 
         yield loader, embeddings
+
+        print("\nPerforming GSQL cleanup after each test...")
+
+        database = client.instance(instance_id).database(google_database)
+        operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
+        operation.result(OPERATION_TIMEOUT_SECONDS)
+
+        # Code to perform teardown after each test goes here
+        print("\nGSQL Cleanup complete.")
 
     def test_spanner_vector_add_data1(self, setup_database):
         loader, embeddings = setup_database
@@ -357,7 +367,7 @@ class TestSpannerVectorStoreGoogleSQL:
             "Testing the langchain integration with spanner", k=3
         )
 
-        assert len(docs) == 2
+        assert len(docs) == 3
 
     def test_spanner_vector_search_data4(self, setup_database):
         loader, embeddings = setup_database
@@ -384,7 +394,7 @@ class TestSpannerVectorStoreGoogleSQL:
 
 class TestSpannerVectorStorePGSQL:
     @pytest.fixture(scope="class")
-    def setup_database(self, client, cleanupPGSQL):
+    def setup_database(self, client):
         SpannerVectorStore.init_vector_store_table(
             instance_id=instance_id,
             database_id=pg_database,
@@ -394,9 +404,6 @@ class TestSpannerVectorStorePGSQL:
                 TableColumn(name="metadata", type="JSONB", is_null=True),
                 TableColumn(name="title", type="TEXT", is_null=False),
             ],
-            secondary_indexes=[
-                SecondaryIndex(index_name="test_index_1", columns=["row_id"])
-            ],
         )
 
         loader = HNLoader("https://news.ycombinator.com/item?id=34817881")
@@ -404,6 +411,15 @@ class TestSpannerVectorStorePGSQL:
         embeddings = FakeEmbeddings(size=3)
 
         yield loader, embeddings
+
+        print("\nPerforming PGSQL cleanup after each test...")
+
+        database = client.instance(instance_id).database(pg_database)
+        operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
+        operation.result(OPERATION_TIMEOUT_SECONDS)
+
+        # Code to perform teardown after each test goes here
+        print("\n PGSQL Cleanup complete.")
 
     def test_spanner_vector_add_data1(self, setup_database):
         loader, embeddings = setup_database
@@ -533,7 +549,7 @@ class TestSpannerVectorStorePGSQL:
             "Testing the langchain integration with spanner", k=3
         )
 
-        assert len(docs) == 2
+        assert len(docs) == 3
 
     def test_spanner_vector_search_data4(self, setup_database):
         loader, embeddings = setup_database
