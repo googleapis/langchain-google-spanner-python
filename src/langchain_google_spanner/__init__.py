@@ -13,7 +13,25 @@
 # limitations under the License.
 
 from langchain_google_spanner.chat_message_history import SpannerChatMessageHistory
+from langchain_google_spanner.vector_store import (
+    DistanceStrategy,
+    QueryParameters,
+    SecondaryIndex,
+    SpannerVectorStore,
+    TableColumn,
+)
 
+from .loader import SpannerDocumentSaver, SpannerLoader
 from .version import __version__
 
-__all__ = ["__version__", "SpannerChatMessageHistory"]
+__all__ = [
+    "__version__",
+    "SpannerChatMessageHistory",
+    "SpannerVectorStore",
+    "SpannerDocumentSaver",
+    "SpannerLoader",
+    "TableColumn",
+    "SecondaryIndex",
+    "QueryParameters",
+    "DistanceStrategy",
+]
