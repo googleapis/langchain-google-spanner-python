@@ -18,12 +18,14 @@ from langchain_google_spanner.vector_store import (
     SecondaryIndex,
     SpannerVectorStore,
     TableColumn,
+    SpannerChatMessageHistory,
 )
 
 from .version import __version__
 
 __all__ = [
     "__version__",
+    "SpannerChatMessageHistory",
     "SpannerVectorStore",
     "TableColumn",
     "SecondaryIndex",
