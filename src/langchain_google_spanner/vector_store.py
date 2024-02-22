@@ -320,12 +320,12 @@ class SpannerVectorStore(VectorStore):
         instance = client.instance(instance_id)
 
         if not instance.exists():
-            raise Exception("Instance with id-{} doesn't exist.".format(instance_id))
+            raise Exception("Instance with id:  {} doesn't exist.".format(instance_id))
 
         database = instance.database(database_id)
 
         if not database.exists():
-            raise Exception("Database with id-{} doesn't exist.".format(database_id))
+            raise Exception("Database with id: {} doesn't exist.".format(database_id))
 
         database.reload()
 
@@ -506,7 +506,7 @@ class SpannerVectorStore(VectorStore):
         instance = self._client.instance(instance_id)
 
         if not instance.exists():
-            raise Exception("Instance with id-{} doesn't exist.".format(instance_id))
+            raise Exception("Instance with id: {} doesn't exist.".format(instance_id))
 
         self._database = instance.database(database_id)
 
@@ -520,12 +520,12 @@ class SpannerVectorStore(VectorStore):
             types = self.PGSQL_TYPES
 
         if not self._database.exists():
-            raise Exception("Database with id-{} doesn't exist.".format(database_id))
+            raise Exception("Database with id: {} doesn't exist.".format(database_id))
 
         table = self._database.table(table_name)
 
         if not table.exists():
-            raise Exception("Table with name-{} doesn't exist.".format(table_name))
+            raise Exception("Table with name: {} doesn't exist.".format(table_name))
 
         column_type_map = self._get_column_type_map(self._database, table_name)
 
