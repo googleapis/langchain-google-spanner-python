@@ -33,6 +33,25 @@ source <your-env>/bin/activate
 <your-env>/bin/pip install langchain-google-spanner
 ```
 
+## Vector Store Usage
+
+Use a vector store to store embedded data and perform vector search.
+
+```python
+from langchain_google_sapnner import SpannerVectorstore
+from langchain.embeddings import VertexAIEmbeddings
+
+embeddings_service = VertexAIEmbeddings()
+vectorstore = SpannerVectorStore(
+    instance_id="my-instance",
+    database_id="my-database",
+    table_name="my-table",
+    embeddings=embedding_service
+)
+```
+
+See the full [Vector Store][vectorstore] tutorial.
+
 ## Document Loader Usage
 
 Use a document loader to load data as LangChain `Document`s.
@@ -94,4 +113,5 @@ This is not an officially supported Google product.
 [venv]: https://virtualenv.pypa.io/en/latest/
 [loader]: ./docs/document_loader.ipynb
 [history]: ./docs/chat_message_history.ipynb
+[vectorstore]: ./docs/vector_store.ipynb
 [langchain]: https://github.com/langchain-ai/langchain
