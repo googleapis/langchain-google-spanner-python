@@ -320,12 +320,12 @@ class SpannerVectorStore(VectorStore):
         instance = client.instance(instance_id)
 
         if not instance.exists():
-            raise Exception("Instance with id-{} doesn't exist.".format(instance_id))
+            raise Exception("Instance with id:  {} doesn't exist.".format(instance_id))
 
         database = instance.database(database_id)
 
         if not database.exists():
-            raise Exception("Database with id-{} doesn't exist.".format(database_id))
+            raise Exception("Database with id: {} doesn't exist.".format(database_id))
 
         database.reload()
 
@@ -672,12 +672,12 @@ class SpannerVectorStore(VectorStore):
         if number_of_records == 0:
             return []
 
-        if ids is not None:
+        if ids is not None and len(ids) != number_of_records:
             raise ValueError(
                 f"size of list of IDs should be equals to number of documents. Expected: {number_of_records}  but found {len(ids)}"
             )
 
-        if metadatas is not None:
+        if metadatas is not None and len(metadatas) != number_of_records:
             raise ValueError(
                 f"size of list of metadatas should be equals to number of documents. Expected: {number_of_records}  but found {len(metadatas)}"
             )
@@ -785,8 +785,10 @@ class SpannerVectorStore(VectorStore):
 
                 values.append(value)
 
+        delete_row_count: int = 0
+
         def delete_records(transaction):
-            # ToDo: Debug why not working
+            nonlocal delete_row_count
             base_delete_statement = "DELETE FROM {} WHERE ".format(self._table_name)
 
             (
@@ -798,7 +800,6 @@ class SpannerVectorStore(VectorStore):
             sql_delete = base_delete_statement + where_clause
 
             # Iterate over the list of lists of values
-            delete_row_count = 0
             for value_tuple in values:
                 # Construct the params dictionary
                 values_tuple_param = (
@@ -817,7 +818,9 @@ class SpannerVectorStore(VectorStore):
 
         self._database.run_in_transaction(delete_records)
 
-        return True
+        if delete_row_count > 0:
+            return True
+        return None
 
     def similarity_search_with_score_by_vector(
         self,
