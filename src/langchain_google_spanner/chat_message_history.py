@@ -151,6 +151,8 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
             Operation: The operation to create the table.
         """
 
+        client = client_with_user_agent(client, USER_AGENT_CHAT)
+
         instance = client.instance(instance_id)
 
         if not instance.exists():
