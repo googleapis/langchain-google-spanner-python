@@ -128,15 +128,53 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
                     f"{ddl};"
                 )
 
-    def create_chat_history_table(self) -> None:
-        google_schema = f"""CREATE TABLE IF NOT EXISTS {self.table_name} (
+    @staticmethod
+    def create_chat_history_table(
+        instance_id: str,
+        database_id: str,
+        table_name: str,
+        client: spanner.Client = spanner.Client(),
+    ) -> None:
+        """
+        Create a chat history table in a Cloud Spanner database.
+
+        Args:
+            instance_id (str): The ID of the Cloud Spanner instance.
+            database_id (str): The ID of the Cloud Spanner database.
+            table_name (str): The name of the table to be created.
+            client (spanner.Client, optional): An instance of the Cloud Spanner client. Defaults to spanner.Client().
+
+        Raises:
+            Exception: If the specified instance or database does not exist.
+
+        Returns:
+            Operation: The operation to create the table.
+        """
+
+        client = client_with_user_agent(client, USER_AGENT_CHAT)
+
+        instance = client.instance(instance_id)
+
+        if not instance.exists():
+            raise Exception("Instance with id:  {} doesn't exist.".format(instance_id))
+
+        database = instance.database(database_id)
+
+        if not database.exists():
+            raise Exception("Database with id: {} doesn't exist.".format(database_id))
+
+        database.reload()
+
+        dialect = database.database_dialect
+
+        google_schema = f"""CREATE TABLE IF NOT EXISTS {table_name} (
                             id STRING(36) DEFAULT (GENERATE_UUID()),
                             created_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
                             session_id STRING(MAX) NOT NULL,
                             message JSON NOT NULL,
                          ) PRIMARY KEY (session_id, created_at ASC, id)"""
 
-        pg_schema = f"""CREATE TABLE IF NOT EXISTS {self.table_name}  (
+        pg_schema = f"""CREATE TABLE IF NOT EXISTS {table_name}  (
                              id varchar(36) DEFAULT (spanner.generate_uuid()),
                              created_at SPANNER.COMMIT_TIMESTAMP NOT NULL,
                              session_id TEXT NOT NULL,
@@ -144,10 +182,11 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
                              PRIMARY KEY (session_id, created_at, id)
                          );"""
 
-        ddl = pg_schema if self.dialect == DatabaseDialect.POSTGRESQL else google_schema
-        database = self.client.instance(self.instance_id).database(self.database_id)
+        ddl = pg_schema if dialect == DatabaseDialect.POSTGRESQL else google_schema
+
         operation = database.update_ddl([ddl])
         operation.result(OPERATION_TIMEOUT_SECONDS)
+
         return operation
 
     @property
