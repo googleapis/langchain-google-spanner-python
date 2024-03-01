@@ -37,25 +37,10 @@ def client() -> Client:
 @pytest.fixture(scope="module")
 def setup(client):
     for env in ["GOOGLE_DATABASE", "PG_DATABASE"]:
-        google_schema = f"""CREATE TABLE IF NOT EXISTS {table_name} (
-                                    id STRING(36) DEFAULT (GENERATE_UUID()),
-                                    created_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
-                                    session_id STRING(MAX) NOT NULL,
-                                    message JSON NOT NULL,
-                                 ) PRIMARY KEY (session_id, created_at ASC, id)"""
-
-        pg_schema = f"""CREATE TABLE IF NOT EXISTS {table_name}  (
-                                     id varchar(36) DEFAULT (spanner.generate_uuid()),
-                                     created_at SPANNER.COMMIT_TIMESTAMP NOT NULL,
-                                     session_id TEXT NOT NULL,
-                                     message JSONB NOT NULL,
-                                     PRIMARY KEY (session_id, created_at, id)
-                                 );"""
         database_id = os.environ.get(env)
-        ddl = pg_schema if env == "PG_DATABASE" else google_schema
-        database = client.instance(instance_id).database(database_id)
-        operation = database.update_ddl([ddl])
-        operation.result(OPERATION_TIMEOUT_SECONDS)
+        SpannerChatMessageHistory.create_chat_history_table(
+            instance_id, database_id, table_name
+        )
     yield
     for env in ["GOOGLE_DATABASE", "PG_DATABASE"]:
         database_id = os.environ.get(env)
