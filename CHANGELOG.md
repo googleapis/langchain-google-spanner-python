@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.1.0...v0.2.0) (2024-02-29)
+
+
+### Features
+
+* Creating static utility for initialing chat history table ([#26](https://github.com/googleapis/langchain-google-spanner-python/issues/26)) ([e61499b](https://github.com/googleapis/langchain-google-spanner-python/commit/e61499b8146b2050e6ce7a59e8fc2d3496e77eff))
+
+
+### Documentation
+
+* Adding codelab for Spanner with DocLoader, VectorStore  & Memory ([#23](https://github.com/googleapis/langchain-google-spanner-python/issues/23)) ([06a6c95](https://github.com/googleapis/langchain-google-spanner-python/commit/06a6c95a01184e712ffda3a74fbe1cc22c495297))
+* Update Sample Netflix Application ([#28](https://github.com/googleapis/langchain-google-spanner-python/issues/28)) ([2508ca8](https://github.com/googleapis/langchain-google-spanner-python/commit/2508ca8cb28e277fa538db842d9d35ed60b4db44))
+
 ## 0.1.0 (2024-02-26)
 
 
