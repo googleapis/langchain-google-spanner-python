@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.2.0...v0.2.1) (2024-03-06)
+
+
+### Bug Fixes
+
+* Update user agent ([#36](https://github.com/googleapis/langchain-google-spanner-python/issues/36)) ([a8f6f71](https://github.com/googleapis/langchain-google-spanner-python/commit/a8f6f71e9e2567f03d1428cf7c76304f4fa4aa8e))
+
+
+### Documentation
+
+* Update colabs ([#30](https://github.com/googleapis/langchain-google-spanner-python/issues/30)) ([af66f7c](https://github.com/googleapis/langchain-google-spanner-python/commit/af66f7c13b0e9a972718e57ce64ce73348035940))
+
 ## [0.2.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.1.0...v0.2.0) (2024-02-29)
 
 
