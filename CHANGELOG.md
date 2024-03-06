@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.2.0...v0.2.1) (2024-03-06)
+
+
+### Bug Fixes
+
+* Update user agent ([#36](https://github.com/googleapis/langchain-google-spanner-python/issues/36)) ([a8f6f71](https://github.com/googleapis/langchain-google-spanner-python/commit/a8f6f71e9e2567f03d1428cf7c76304f4fa4aa8e))
+
+
+### Documentation
+
+* Update colabs ([#30](https://github.com/googleapis/langchain-google-spanner-python/issues/30)) ([af66f7c](https://github.com/googleapis/langchain-google-spanner-python/commit/af66f7c13b0e9a972718e57ce64ce73348035940))
+* Update langchain_quick_start.ipynb ([#32](https://github.com/googleapis/langchain-google-spanner-python/issues/32)) ([9d0a38b](https://github.com/googleapis/langchain-google-spanner-python/commit/9d0a38b921099b32e091d270da44b432da4e5393))
+* Update langchain_quick_start.ipynb ([#35](https://github.com/googleapis/langchain-google-spanner-python/issues/35)) ([22bf5c9](https://github.com/googleapis/langchain-google-spanner-python/commit/22bf5c92102a41320b1123742c02b9db926e66c8))
+
 ## [0.2.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.1.0...v0.2.0) (2024-02-29)
 
 
