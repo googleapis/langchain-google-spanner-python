@@ -25,8 +25,8 @@ from langchain_core.documents import Document
 
 from .version import __version__
 
-USER_AGENT_LOADER = "langchain-google-spanner-python:document_loader" + __version__
-USER_AGENT_SAVER = "langchain-google-spanner-python:document_saver" + __version__
+USER_AGENT_LOADER = "langchain-google-spanner-python:document_loader/" + __version__
+USER_AGENT_SAVER = "langchain-google-spanner-python:document_saver/" + __version__
 
 OPERATION_TIMEOUT_SECONDS = 240
 MUTATION_BATCH_SIZE = 1000
@@ -308,7 +308,10 @@ class SpannerDocumentSaver:
         db = self.client.instance(self.instance_id).database(self.database_id)
         values = [
             _load_doc_to_row(
-                self._table_fields, doc, self.content_column, self.metadata_json_column
+                self._table_fields,
+                doc,
+                self.content_column,
+                self.metadata_json_column,
             )
             for doc in documents
         ]

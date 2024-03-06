@@ -15,35 +15,18 @@
 from __future__ import annotations
 
 import datetime
-import json
 import logging
-import re
-import uuid
-import warnings
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
 
 import numpy as np
 from google.cloud import spanner  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from google.cloud.spanner_v1 import JsonObject, param_types
-from google.cloud.spanner_v1.streamed import StreamedResultSet
 from langchain_community.vectorstores.utils import maximal_marginal_relevance
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
 
 from .version import __version__
@@ -55,7 +38,7 @@ CONTENT_COLUMN_NAME = "content"
 EMBEDDING_COLUMN_NAME = "embedding"
 ADDITIONAL_METADATA_COLUMN_NAME = "metadata"
 
-USER_AGENT_VECTOR_STORE = "langchain-google-spanner-python:vector_store" + __version__
+USER_AGENT_VECTOR_STORE = "langchain-google-spanner-python:vector_store/" + __version__
 
 KNN_DISTANCE_SEARCH_QUERY_ALIAS = "distance"
 
@@ -632,7 +615,8 @@ class SpannerVectorStore(VectorStore):
             if column_name not in self._columns_to_insert:
                 if "NO" == column_config[2].upper():
                     raise Exception(
-                        "Found not nullable constraint on column: {}.", column_name
+                        "Found not nullable constraint on column: {}.",
+                        column_name,
                     )
 
     def _select_relevance_score_fn(self) -> Callable[[float], float]:
@@ -728,7 +712,10 @@ class SpannerVectorStore(VectorStore):
             )
 
     def add_documents(
-        self, documents: List[Document], ids: Optional[List[str]] = None, **kwargs: Any
+        self,
+        documents: List[Document],
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> List[str]:
         """
         Add documents to the vector store.
@@ -875,7 +862,7 @@ class SpannerVectorStore(VectorStore):
 
         sql_query = """
             SELECT {select_column_names} {distance_function}({embedding_column}, {vector_embedding_placeholder}) AS {distance_alias}
-            FROM {table_name} 
+            FROM {table_name}
             WHERE {filter}
             ORDER BY distance
             LIMIT {k_count};
@@ -929,7 +916,11 @@ class SpannerVectorStore(VectorStore):
         return documents
 
     def similarity_search(
-        self, query: str, k: int = 4, pre_filter: Optional[str] = None, **kwargs: Any
+        self,
+        query: str,
+        k: int = 4,
+        pre_filter: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """
         Perform similarity search for a given query.
@@ -949,7 +940,11 @@ class SpannerVectorStore(VectorStore):
         return [doc for doc, _ in documents]
 
     def similarity_search_with_score(
-        self, query: str, k: int = 4, pre_filter: Optional[str] = None, **kwargs: Any
+        self,
+        query: str,
+        k: int = 4,
+        pre_filter: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """
         Perform similarity search for a given query with scores.
