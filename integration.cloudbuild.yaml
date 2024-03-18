@@ -27,6 +27,7 @@ steps:
     name: python:${_VERSION}
     entrypoint: python
     args: ["-m", "pytest"]
+    timeout: "4800s"
     env:
       - "PROJECT_ID=$PROJECT_ID"
       - "INSTANCE_ID=${_INSTANCE_ID}"
