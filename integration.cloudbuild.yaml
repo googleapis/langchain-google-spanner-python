@@ -14,27 +14,31 @@
 
 steps:
   - id: Install dependencies
-    name: python:3.11
+    name: python:${_VERSION}
     entrypoint: pip
     args: ["install", "--user", "-r", "requirements.txt"]
 
   - id: Install module (and test requirements)
-    name: python:3.11
+    name: python:${_VERSION}
     entrypoint: pip
     args: ["install", ".[test]", "--user"]
 
   - id: Run integration tests
-    name: python:3.11
+    name: python:${_VERSION}
     entrypoint: python
     args: ["-m", "pytest"]
     env:
-      - 'PROJECT_ID=$PROJECT_ID'
-      - 'INSTANCE_ID=${_INSTANCE_ID}'
-      - 'GOOGLE_DATABASE=${_GOOGLE_DATABASE}'
-      - 'PG_DATABASE=${_PG_DATABASE}'
-      - 'TABLE_NAME=test_$BUILD_ID'
+      - "PROJECT_ID=$PROJECT_ID"
+      - "INSTANCE_ID=${_INSTANCE_ID}"
+      - "GOOGLE_DATABASE=${_GOOGLE_DATABASE}"
+      - "PG_DATABASE=${_PG_DATABASE}"
+      - "TABLE_NAME=test_$BUILD_ID"
 
 substitutions:
   _INSTANCE_ID: test-instance
   _GOOGLE_DATABASE: test-google-db
   _PG_DATABASE: test-pg-db
+  _VERSION: "3.8"
+
+options:
+  dynamicSubstitutions: true
