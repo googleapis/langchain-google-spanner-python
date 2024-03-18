@@ -62,7 +62,7 @@ Use `gcloud builds triggers import --source=trigger.yaml` create triggers via th
 
 #### Project Setup
 
-1. Create an spanner cluster, instance, and database
+1. Create an spanner instance and database
 1. Setup Cloud Build triggers (above)
 
 #### Run tests with Cloud Build
