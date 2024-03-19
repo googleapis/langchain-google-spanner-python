@@ -14,6 +14,7 @@
 
 
 import os
+import uuid
 
 import pytest  # noqa
 from google.cloud.spanner import Client  # type: ignore
@@ -24,7 +25,7 @@ from langchain_google_spanner import SpannerChatMessageHistory
 
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
-table_name = os.environ["TABLE_NAME"].replace("-", "_")
+table_name = "test_table" + str(uuid.uuid4()).replace("-", "_")
 
 OPERATION_TIMEOUT_SECONDS = 240
 
