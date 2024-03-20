@@ -14,18 +14,16 @@
 
 import datetime
 import os
-import random
 import uuid
 
 import pytest
-from google.cloud.spanner import Client, KeySet  # type: ignore
+from google.cloud.spanner import Client  # type: ignore
 from langchain_community.document_loaders import HNLoader
 from langchain_community.embeddings import FakeEmbeddings
 
 from langchain_google_spanner.vector_store import (  # type: ignore
     DistanceStrategy,
     QueryParameters,
-    SecondaryIndex,
     SpannerVectorStore,
     TableColumn,
 )
@@ -34,9 +32,7 @@ project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
 google_database = os.environ["GOOGLE_DATABASE"]
 pg_database = os.environ["PG_DATABASE"]
-table_name = os.environ["TABLE_NAME"].replace("-", "_") + str(
-    random.randint(10000, 99999)
-)
+table_name = "test_table" + str(uuid.uuid4()).replace("-", "_")
 
 
 OPERATION_TIMEOUT_SECONDS = 240

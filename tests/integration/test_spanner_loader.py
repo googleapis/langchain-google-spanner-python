@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import uuid
 
 import pytest
 from google.cloud.spanner import Client, KeySet  # type: ignore
@@ -24,7 +25,7 @@ project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
 google_database = os.environ["GOOGLE_DATABASE"]
 pg_database = os.environ["PG_DATABASE"]
-table_name = os.environ["TABLE_NAME"].replace("-", "_")
+table_name = "test_table" + str(uuid.uuid4()).replace("-", "_")
 
 OPERATION_TIMEOUT_SECONDS = 240
 
@@ -59,7 +60,12 @@ class TestSpannerDocumentLoaderGoogleSQL:
             table_name,
             client=client,
             content_column="product_id",
-            metadata_columns=["product_name", "description", "price", "dummy_col"],
+            metadata_columns=[
+                "product_name",
+                "description",
+                "price",
+                "dummy_col",
+            ],
         )
         test_documents = [
             Document(
@@ -472,7 +478,12 @@ class TestSpannerDocumentLoaderPostgreSQL:
             table_name,
             client=client,
             content_column="product_id",
-            metadata_columns=["product_name", "description", "price", "dummy_col"],
+            metadata_columns=[
+                "product_name",
+                "description",
+                "price",
+                "dummy_col",
+            ],
         )
         test_documents = [
             Document(
