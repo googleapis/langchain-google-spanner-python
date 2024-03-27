@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.2.1...v0.3.0) (2024-03-27)
+
+
+### Features
+
+* **ci:** Test against multiple versions ([#45](https://github.com/googleapis/langchain-google-spanner-python/issues/45)) ([1e9c1a1](https://github.com/googleapis/langchain-google-spanner-python/commit/1e9c1a1fcadc85f5f45837cdef1261c697cc89f7))
+
+
+### Documentation
+
+* Add github links ([#37](https://github.com/googleapis/langchain-google-spanner-python/issues/37)) ([da7f833](https://github.com/googleapis/langchain-google-spanner-python/commit/da7f833aec89f176379f18f16ef5bc069b5470e0))
+
 ## [0.2.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.2.0...v0.2.1) (2024-03-06)
 
 
