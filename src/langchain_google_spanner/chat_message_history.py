@@ -133,7 +133,7 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
         instance_id: str,
         database_id: str,
         table_name: str,
-        client: spanner.Client = spanner.Client(),
+        client: Optional[spanner.Client] = None,
     ) -> None:
         """
         Create a chat history table in a Cloud Spanner database.
@@ -142,7 +142,7 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
             instance_id (str): The ID of the Cloud Spanner instance.
             database_id (str): The ID of the Cloud Spanner database.
             table_name (str): The name of the table to be created.
-            client (spanner.Client, optional): An instance of the Cloud Spanner client. Defaults to spanner.Client().
+            client (spanner.Client, optional): An instance of the Cloud Spanner client. Defaults to None.
 
         Raises:
             Exception: If the specified instance or database does not exist.
