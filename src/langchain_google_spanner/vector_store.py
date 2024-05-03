@@ -300,6 +300,7 @@ class SpannerVectorStore(VectorStore):
         - vector_size (Optional[int]): The size of the vector. Defaults to None.
         """
 
+        client = client_with_user_agent(client, USER_AGENT_VECTOR_STORE)
         instance = client.instance(instance_id)
 
         if not instance.exists():
