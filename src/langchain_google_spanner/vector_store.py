@@ -276,7 +276,7 @@ class SpannerVectorStore(VectorStore):
         instance_id: str,
         database_id: str,
         table_name: str,
-        client: spanner.Client = spanner.Client(),
+        client: Optional[spanner.Client] = None,
         id_column: Union[str, TableColumn] = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
@@ -300,6 +300,7 @@ class SpannerVectorStore(VectorStore):
         - vector_size (Optional[int]): The size of the vector. Defaults to None.
         """
 
+        client = client_with_user_agent(client, USER_AGENT_VECTOR_STORE)
         instance = client.instance(instance_id)
 
         if not instance.exists():
@@ -446,7 +447,7 @@ class SpannerVectorStore(VectorStore):
         id_column: str = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
-        client: spanner.Client = spanner.Client(),
+        client: Optional[spanner.Client] = None,
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
@@ -1109,7 +1110,7 @@ class SpannerVectorStore(VectorStore):
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
         ids: Optional[List[str]] = None,
-        client: spanner.Client = spanner.Client(),
+        client: Optional[spanner.Client] = None,
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
@@ -1170,7 +1171,7 @@ class SpannerVectorStore(VectorStore):
         content_column: str = CONTENT_COLUMN_NAME,
         embedding_column: str = EMBEDDING_COLUMN_NAME,
         ids: Optional[List[str]] = None,
-        client: spanner.Client = spanner.Client(),
+        client: Optional[spanner.Client] = None,
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
