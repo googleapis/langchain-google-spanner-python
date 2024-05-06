@@ -2,7 +2,7 @@
 name = "langchain-google-spanner"
 dynamic = ["version"]
 description = "LangChain integrations for Google Cloud Spanner"
-readme = "README.md"
+readme = "README.rst"
 license = {file = "LICENSE"}
 requires-python = ">=3.8"
 authors = [
@@ -12,6 +12,17 @@ dependencies = [
     "langchain-core>=0.1.25, <1.0.0",
     "langchain-community>=0.0.18, <1.0.0",
     "google-cloud-spanner>=3.41.0, <4.0.0"
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 [tool.setuptools.dynamic]
@@ -46,3 +57,8 @@ profile = "black"
 [tool.mypy]
 python_version = 3.8
 warn_unused_configs = true
+
+exclude = [
+    'docs/*',
+    'noxfile.py'
+]
