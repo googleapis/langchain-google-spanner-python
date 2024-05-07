@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.2.1...v0.3.0) (2024-05-06)
+
+
+### Features
+
+* **ci:** Test against multiple versions ([#45](https://github.com/googleapis/langchain-google-spanner-python/issues/45)) ([1e9c1a1](https://github.com/googleapis/langchain-google-spanner-python/commit/1e9c1a1fcadc85f5f45837cdef1261c697cc89f7))
+
+
+### Bug Fixes
+
+* Make client optional when init ([#60](https://github.com/googleapis/langchain-google-spanner-python/issues/60)) ([0f5124a](https://github.com/googleapis/langchain-google-spanner-python/commit/0f5124a97b6d7c6fcba13bf22b4e01b41d62d347))
+
+
+### Documentation
+
+* Add API reference docs ([#59](https://github.com/googleapis/langchain-google-spanner-python/issues/59)) ([0f62a6a](https://github.com/googleapis/langchain-google-spanner-python/commit/0f62a6af8399349da06a366d8a29f792a7bcf049))
+* Add github links ([#37](https://github.com/googleapis/langchain-google-spanner-python/issues/37)) ([da7f833](https://github.com/googleapis/langchain-google-spanner-python/commit/da7f833aec89f176379f18f16ef5bc069b5470e0))
+
 ## [0.2.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.2.0...v0.2.1) (2024-03-06)
 
 
