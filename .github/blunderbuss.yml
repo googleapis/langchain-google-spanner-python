@@ -1,0 +1,4 @@
+assign_issues:
+  - googleapis/langchain-spanner
+assign_prs:
+  - googleapis/langchain-spanner
