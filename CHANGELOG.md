@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.3.0...v0.3.1) (2024-08-06)
+
+
+### Documentation
+
+* Fix format in README.rst ([#84](https://github.com/googleapis/langchain-google-spanner-python/issues/84)) ([366a040](https://github.com/googleapis/langchain-google-spanner-python/commit/366a040828fdecc28217661955d9c6376808cc9c))
+
 ## [0.3.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.2.1...v0.3.0) (2024-05-06)
 
 
