@@ -212,7 +212,7 @@ class SpannerChatMessageHistory(BaseChatMessageHistory):
     def add_message(self, message: BaseMessage) -> None:
         """Append the message to the record in Cloud Spanner"""
         with self.database.batch() as batch:
-            batch.insert(
+            batch.insert_or_update(
                 table=self.table_name,
                 columns=("session_id", "created_at", "message"),
                 values=[
