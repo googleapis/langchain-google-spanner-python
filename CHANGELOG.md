@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.3.0...v0.4.0) (2024-09-24)
+
+
+### Features
+
+* Remove support for Python 3.8 ([#92](https://github.com/googleapis/langchain-google-spanner-python/issues/92)) ([8446e0e](https://github.com/googleapis/langchain-google-spanner-python/commit/8446e0e68b5a86d9ad96925908159aa4c5e9b484))
+
+
+### Bug Fixes
+
+* Use Spanner's UPSERT over INSERT ([#90](https://github.com/googleapis/langchain-google-spanner-python/issues/90)) ([2637e2d](https://github.com/googleapis/langchain-google-spanner-python/commit/2637e2de2ab75dfd51abff7cf0b0c5cd90e6cec9))
+
+
+### Documentation
+
+* Fix format in README.rst ([#84](https://github.com/googleapis/langchain-google-spanner-python/issues/84)) ([366a040](https://github.com/googleapis/langchain-google-spanner-python/commit/366a040828fdecc28217661955d9c6376808cc9c))
+
 ## [0.3.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.2.1...v0.3.0) (2024-05-06)
 
 
