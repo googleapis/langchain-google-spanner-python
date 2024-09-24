@@ -706,7 +706,7 @@ class SpannerVectorStore(VectorStore):
 
     def _insert_data(self, records, columns_to_insert):
         with self._database.batch() as batch:
-            batch.insert(
+            batch.insert_or_update(
                 table=self._table_name,
                 columns=columns_to_insert,
                 values=records,

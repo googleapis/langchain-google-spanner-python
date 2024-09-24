@@ -318,7 +318,7 @@ class SpannerDocumentSaver:
 
         for values_batch in _batch(values, MUTATION_BATCH_SIZE):
             with db.batch() as batch:
-                batch.insert(
+                batch.insert_or_update(
                     table=self.table_name,
                     columns=self._table_fields,
                     values=values_batch,
