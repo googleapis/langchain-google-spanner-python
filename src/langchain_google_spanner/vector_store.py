@@ -830,7 +830,9 @@ class SpannerVectorStore(VectorStore):
         """
 
         results, column_order_map = self._get_rows_by_similarity_search(
-            embedding, k, pre_filter
+            embedding=embedding,
+            k=k,
+            pre_filter=pre_filter
         )
         documents = self._get_documents_from_query_results(
             list(results), column_order_map
