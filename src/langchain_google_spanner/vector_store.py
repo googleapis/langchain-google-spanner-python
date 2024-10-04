@@ -383,7 +383,10 @@ class SpannerVectorStore(VectorStore):
                 )
 
         configs = [id_column, content_column, embedding_column]
-        configs.extend(column_configs)
+
+        if column_configs is not None:
+            configs.extend(column_configs)
+            
         column_configs = configs
 
         if primary_key is None:
