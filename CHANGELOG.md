@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.4.0...v0.4.1) (2024-10-04)
+
+
+### Bug Fixes
+
+* Adding support to initialize with empty metadata columns ([#99](https://github.com/googleapis/langchain-google-spanner-python/issues/99)) ([3a8367c](https://github.com/googleapis/langchain-google-spanner-python/commit/3a8367c82705f352cb263ebfed30da02977de4cc))
+
 ## [0.4.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.3.0...v0.4.0) (2024-09-24)
 
 
