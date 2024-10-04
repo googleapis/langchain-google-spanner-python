@@ -386,7 +386,7 @@ class SpannerVectorStore(VectorStore):
 
         if column_configs is not None:
             configs.extend(column_configs)
-            
+
         column_configs = configs
 
         if primary_key is None:
