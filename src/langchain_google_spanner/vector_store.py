@@ -672,6 +672,13 @@ class SpannerVectorStore(VectorStore):
 
         embeds = self._embedding_service.embed_documents(texts_list)
 
+        if len(embeds) != number_of_records:
+            raise ValueError(
+                "Number of embeddings should equal the number of documents."
+                "Try reducing the batch size when adding the documents."
+                f" Expected: {number_of_records}, but found {len(embeds)}"
+            )
+
         if metadatas is None:
             metadatas = [{} for _ in texts]
 
