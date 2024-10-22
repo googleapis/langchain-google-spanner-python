@@ -131,6 +131,27 @@ See the full `Chat Message History`_ tutorial.
 
 .. _`Chat Message History`: https://github.com/googleapis/langchain-google-spanner-python/blob/main/docs/chat_message_history.ipynb
 
+Spanner Graph Store Usage
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``SpannerGraphStore`` to store nodes and edges extracted from documents.
+
+.. code:: python
+
+   from langchain_google_spanner import SpannerGraphStore
+
+
+    graph = SpannerGraphStore(
+        instance_id="my-instance",
+        database_id="my-database",
+        graph_name="my_graph",
+    )
+
+See the full `Spanner Graph Store`_ tutorial.
+
+.. _`Spanner Graph Store`: https://github.com/googleapis/langchain-google-spanner-python/blob/main/docs/graph_store.ipynb
+
+
 Contributions
 ~~~~~~~~~~~~~
 
