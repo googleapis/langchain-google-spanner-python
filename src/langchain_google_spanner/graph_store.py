@@ -18,7 +18,7 @@ from abc import abstractmethod
 import datetime
 import re
 import string
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from google.cloud import spanner
 from google.cloud.spanner_v1 import param_types
@@ -33,6 +33,42 @@ def to_identifier(s: str) -> str:
 
 def to_identifiers(s: List[str]) -> str:
   return map(to_identifier, s)
+
+
+class NodeWrapper(object):
+  """Wrapper around Node to support set operations using node id"""
+
+  def __init__(self, node: Node):
+    self.node = node
+
+  def __hash__(self):
+    return hash(self.node.id)
+
+  def __eq__(self, other: Any):
+    if isinstance(other, NodeWrapper):
+      return self.node.id == other.node.id
+    return False
+
+
+class EdgeWrapper(object):
+  """Wrapper around Relationship to support set operations using edge source and target id"""
+
+  def __init__(self, edge: Relationship):
+    self.edge = edge
+
+  def __hash__(self):
+    return hash((
+        self.edge.source.id,
+        self.edge.target.id,
+    ))
+
+  def __eq__(self, other: Any):
+    if isinstance(other, EdgeWrapper):
+      return (
+          self.edge.source.id == other.edge.source.id
+          and self.edge.target.id == other.edge.target.id
+      )
+    return False
 
 
 def partition_graph_docs(
@@ -51,16 +87,32 @@ def partition_graph_docs(
   edges = CaseInsensitiveDict()
   for doc in graph_documents:
     for node in doc.nodes:
-      if node.type in nodes:
-        nodes.get(node.type).append(node)
+      s = nodes.setdefault(node.type, set())
+      w = NodeWrapper(node)
+      if w in s:
+        # Combine the properties for nodes with the same id.
+        n = next(filter(lambda v: v == w, s))
+        n.node.properties.update(node.properties)
       else:
-        nodes[node.type] = [node]
+        s.add(w)
+
     for edge in doc.relationships:
-      if edge.type in edges:
-        edges.get(edge.type).append(edge)
+      # Partition edges by the triplet because there could be edges with the
+      # same type but between different types of nodes.
+      edge_name = "{}_{}_{}".format(
+          edge.source.type, edge.type, edge.target.type
+      )
+      s = edges.setdefault(edge_name, set())
+      w = EdgeWrapper(edge)
+      if w in s:
+        # Combine the properties for edges with the same id.
+        e = next(filter(lambda v: v == w, s))
+        e.edge.properties.update(edge.properties)
       else:
-        edges[edge.type] = [edge]
-  return nodes, edges
+        s.add(w)
+  return {name: [w.node for w in ws] for name, ws in nodes.items()}, {
+      name: [w.edge for w in ws] for name, ws in edges.items()
+  }
 
 
 class TypeUtility(object):
@@ -285,7 +337,10 @@ class ElementSchema(object):
         ElementSchema.TARGET_NODE_KEY_COLUMN_NAME,
     ]
     edge.base_table_name = name
-    edge.labels = [name]
+
+    # Uses the type as label because the label can be shared by multiple base
+    # tables.
+    edge.labels = [edges[0].type]
     edge.properties = CaseInsensitiveDict({prop: prop for prop in props})
     edge.types = CaseInsensitiveDict({
         k: TypeUtility.value_to_param_type(v)

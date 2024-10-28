@@ -92,45 +92,48 @@ def random_generators():
   )
 
 
+properties = [
+    ("p{}".format(i), random_val_gen)
+    for i, random_val_gen in enumerate(random_generators())
+]
+
+
+def random_property():
+  k, vg = random.choice(properties)
+  return k, vg()
+
+
+def random_properties():
+  props = {}
+  for _ in range(random_int(0, len(properties))):
+    k, v = random_property()
+    props[k] = v
+  return props
+
+
+def random_node(t):
+  return Node(id=random_string(), type=t, properties=random_properties())
+
+
+def random_edge(e, s, t):
+  return Relationship(
+      source=s, target=t, type=e, properties=random_properties()
+  )
+
+
 def random_graph_doc(suffix):
 
   node_types = ["Node{}{}".format(i, suffix) for i in range(2)]
   edge_types = [
-      ("Edge{}{}{}".format(i, j, suffix), node_types[i], node_types[j])
+      ("Edge{}{}".format(k, suffix), node_types[i], node_types[j])
+      for k in range(2)
       for i in range(2)
       for j in range(2)
   ]
-  properties = [
-      ("p{}".format(i), random_val_gen)
-      for i, random_val_gen in enumerate(random_generators())
-  ]
-
-  def random_property():
-    k, vg = random.choice(properties)
-    return k, vg()
-
-  def random_properties():
-    props = {}
-    for _ in range(random_int(0, len(properties))):
-      k, v = random_property()
-      props[k] = v
-    return props
-
-  random_node = lambda t: Node(
-      id=random_string(),
-      type=t,
-      properties=random_properties(),
-  )
   nodes = {
       t: [random_node(t) for _ in range(random_int(10, 20))] for t in node_types
   }
 
-  random_edge = lambda e, s, t: Relationship(
-      source=s,
-      target=t,
-      type=e,
-      properties=random_properties(),
-  )
   edges = {
       e: [
           random_edge(e, source, target)
@@ -209,4 +212,59 @@ class TestSpannerGraphStore:
       print(graph.get_schema)
       print(graph.get_structured_schema)
       print(graph.get_ddl())
+      graph.cleanup()
+
+  def test_spanner_graph_doc_with_duplicate_elements(self):
+    suffix = random_string(num_char=5, exclude_whitespaces=True)
+    graph_name = "test_graph{}".format(suffix)
+    graph = SpannerGraphStore(
+        instance_id,
+        google_database,
+        graph_name,
+        client=Client(project=project_id),
+    )
+    graph.refresh_schema()
+
+    try:
+      node0 = random_node("Node0{}".format(suffix))
+      node1 = random_node("Node1{}".format(suffix))
+      edge0 = random_edge("Edge01", node0, node1)
+      edge1 = random_edge("Edge01", node0, node1)
+
+      doc = GraphDocument(
+          nodes=[node0, node1, node0, node1],
+          relationships=[edge0, edge1],
+          source=Document(
+              page_content="Hello, world!",
+              metadata={"source": "https://example.com"},
+          ),
+      )
+      graph.add_graph_documents([doc])
+
+      results = graph.query(
+          """
+          GRAPH {}
+
+          MATCH -[e]->
+          RETURN TO_JSON(e)['properties'] AS properties
+          """.format(graph_name),
+          params={"param": random_param()},
+      )
+      assert len(results) == 1
+
+      print(set(edge0.properties.keys()))
+      print(set(edge1.properties.keys()))
+      print(set(results[0]["properties"].keys()))
+
+      edge_properties = edge0.properties
+      edge_properties.update(edge1.properties)
+      missing_properties = set(edge_properties.keys()).difference(
+          set(results[0]["properties"].keys())
+      )
+      assert (
+          len(missing_properties) == 0
+      ), "Missing properties of edge: {}".format(missing_properties)
+
+    finally:
+      print("Clean up graph with name `{}`".format(graph_name))
       graph.cleanup()
