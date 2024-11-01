@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Cloud Spanner-based langgraph checkpointer"""
-from typing import Any, Iterator, Optional, Sequence
+from typing import Any, Iterator, Optional, Sequence, Tuple
 from contextlib import closing, contextmanager
 import threading
 
