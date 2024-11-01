@@ -47,7 +47,7 @@ def _config(thread_id, checkpoint_ns, checkpoint_id):
 
 
 class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
-	lock: threading.Lock
+    lock: threading.Lock
 
     def __init__(
         self,
