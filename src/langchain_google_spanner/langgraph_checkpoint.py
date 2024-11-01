@@ -71,7 +71,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         self.conn.autocommit = autocommit
         self.lock = threading.Lock()
 
-    def setup() -> None:
+    def setup(self) -> None:
         with self.cursor() as cur:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS checkpoints (
@@ -94,7 +94,6 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                 value STRING(MAX) NOT NULL,
             ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
             """)
-        return self
 
     @contextmanager
     def cursor(self) -> Iterator[Cursor]:
