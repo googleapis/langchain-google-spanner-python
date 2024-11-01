@@ -71,15 +71,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         self.conn.autocommit = autocommit
         self.lock = threading.Lock()
 
-    @classmethod
-    def create(
-        cls,
-        instance_id: str,
-        database_id: str,
-        project_id: str,
-        **kwargs,
-    ) -> "SpannerCheckpointSaver":
-        self = cls(instance_id, database_id, project_id, **kwargs)
+    def setup() -> None:
         with self.cursor() as cur:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS checkpoints (
