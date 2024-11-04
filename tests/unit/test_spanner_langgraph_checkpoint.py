@@ -15,14 +15,13 @@
 import contextlib
 import json
 import operator
-from typing import Annotated, Any, Iterator, List, Optional, Tuple, Union
+from typing import Annotated, Any, Iterator, Optional, Sequence, Tuple, Union
 from unittest import mock
 
 import pytest
-from google.auth import credentials as auth_credentials
-from google.cloud.spanner_dbapi import connection
+from google.auth import credentials as auth_credentials  # type: ignore[import-untyped]
+from google.cloud.spanner_dbapi import connection  # type: ignore[import-untyped]
 from langchain_core.runnables import RunnableConfig
-from langgraph.channels.base import BaseChannel
 from langgraph.checkpoint.base import (
     Checkpoint,
     CheckpointMetadata,
@@ -30,6 +29,7 @@ from langgraph.checkpoint.base import (
     create_checkpoint,
     empty_checkpoint,
 )
+from langgraph.checkpoint.serde.types import ChannelProtocol
 from langgraph.graph.graph import START
 from langgraph.graph.state import StateGraph
 
@@ -138,10 +138,10 @@ class FaultyPutCheckpointer(SpannerCheckpointSaver):
 
 
 class FaultyPutWritesCheckpointer(SpannerCheckpointSaver):
-    def put_writes(
+    def put_writes(  # type: ignore[override]
         self,
         config: RunnableConfig,
-        writes: List[Tuple[str, Any]],
+        writes: Sequence[Tuple[str, Any]],
         task_id: str,
     ) -> RunnableConfig:
         raise ValueError("Faulty put_writes")
@@ -150,9 +150,9 @@ class FaultyPutWritesCheckpointer(SpannerCheckpointSaver):
 class FaultyVersionCheckpointer(SpannerCheckpointSaver):
     def get_next_version(
         self,
-        current: Optional[int],
-        channel: BaseChannel,
-    ) -> int:
+        current: Optional[str],
+        channel: ChannelProtocol[Any, Any, Any],
+    ) -> str:
         raise ValueError("Faulty get_next_version")
 
 
@@ -161,7 +161,7 @@ def logic(inp: str) -> str:
 
 
 def _test_builder() -> StateGraph:
-    builder = StateGraph(Annotated[str, operator.add])
+    builder = StateGraph(Annotated[str, operator.add])  # type: ignore[arg-type]
     builder.add_node("agent", logic)
     builder.add_edge(START, "agent")
     return builder
@@ -201,13 +201,11 @@ class TestSpannerLanggraphCheckpoint:
             "source": "input",
             "step": 2,
             "writes": {},
-            "score": 1,
         }
         self.metadata_2: CheckpointMetadata = {
             "source": "loop",
             "step": 1,
             "writes": {"foo": "bar"},
-            "score": None,
         }
         self.metadata_3: CheckpointMetadata = {}
 

@@ -15,9 +15,9 @@
 """Cloud Spanner-based langgraph checkpointer"""
 import threading
 from contextlib import closing, contextmanager
-from typing import Any, Iterator, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
 
-from google.cloud.spanner_dbapi import Cursor
+from google.cloud.spanner_dbapi import Cursor  # type: ignore[import-untyped]
 from langchain_core.load.dump import dumps
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
@@ -61,7 +61,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         autocommit: bool = True,
         connect_kwargs: Optional[dict[str, Any]] = None,
     ) -> None:
-        from google.cloud.spanner_dbapi.connection import connect
+        from google.cloud.spanner_dbapi.connection import connect  # type: ignore[import-untyped]
 
         super().__init__()
         self.conn = connect(
@@ -119,10 +119,11 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
             finally:
                 cur.close()
 
-    def list(
+    def list(  # type: ignore[return]
         self,
         config: Optional[RunnableConfig],
         *,
+        filter: Optional[Dict[str, Any]] = None,
         before: Optional[RunnableConfig] = None,
         limit: Optional[int] = None,
     ) -> Iterator[CheckpointTuple]:
@@ -137,19 +138,19 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
             cur.execute(query, param_values)
             _yield_checkpoint_write(self.serde, cur, wcur)
 
-    def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
+    def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:  # type: ignore[return]
         _checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
         with self.cursor() as cur:
             if checkpoint_id := get_checkpoint_id(config):
                 sql = "SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM checkpoints WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s"
-                sql_params = (
+                sql_params = (  # type: ignore[assignment]
                     config["configurable"]["thread_id"],
                     _checkpoint_ns,
                     checkpoint_id,
                 )
             else:  # find the latest checkpoint for the thread_id
                 sql = "SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM checkpoints WHERE thread_id = %s AND checkpoint_ns = %s ORDER BY checkpoint_id DESC LIMIT 1"
-                sql_params = (config["configurable"]["thread_id"], _checkpoint_ns)
+                sql_params = (config["configurable"]["thread_id"], _checkpoint_ns)  # type: ignore[assignment]
             cur.execute(sql, sql_params)
             if _checkpoint := cur.fetchone():
                 (
@@ -241,8 +242,8 @@ def _load_checkpoint_tuple(
 ) -> CheckpointTuple:
     return CheckpointTuple(
         config,
-        serde.loads(checkpoint),
-        serde.loads(metadata),
+        serde.loads(checkpoint),  # type: ignore[arg-type]
+        serde.loads(metadata),  # type: ignore[arg-type]
         (
             _config(thread_id, checkpoint_ns, parent_checkpoint_id)
             if parent_checkpoint_id
