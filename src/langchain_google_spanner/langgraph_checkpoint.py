@@ -19,15 +19,16 @@ import threading
 
 from langchain_core.load.dump import dumps
 from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.serde.base import SerializerProtocol
 from langgraph.checkpoint.base import (
     WRITES_IDX_MAP,
+    BaseCheckpointSaver,
     ChannelVersions,
     Checkpoint,
     CheckpointMetadata,
     CheckpointTuple,
     get_checkpoint_id,
 )
-from langgraph.checkpoint.base import BaseCheckpointSaver
 from google.cloud.spanner_dbapi import Cursor
 
 MetadataInput = Optional[dict[str, Any]]
@@ -38,12 +39,12 @@ USER_AGENT_CHECKPOINTER = f"langchain-google-spanner-python:checkpointer/{__vers
 OPERATION_TIMEOUT_SECONDS = 240
 
 
-def _config(thread_id, checkpoint_ns, checkpoint_id):
-    return {"configurable": {
+def _config(thread_id, checkpoint_ns, checkpoint_id) -> RunnableConfig:
+    return RunnableConfig(configurable={
         "thread_id": thread_id,
         "checkpoint_ns": checkpoint_ns,
         "checkpoint_id": checkpoint_id,
-    }}
+    })
 
 
 class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
@@ -119,7 +120,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         before: Optional[RunnableConfig] = None,
         limit: Optional[int] = None,
     ) -> Iterator[CheckpointTuple]:
-        where, param_values = search_where(config, before)
+        where, param_values = _search_where(config, before)
         query = f"""SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata
         FROM checkpoints
         {where}
@@ -128,45 +129,22 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
             query += f" LIMIT {limit}"
         with self.cursor() as cur, closing(self.conn.cursor()) as wcur:
             cur.execute(query, param_values)
-            for (
-                thread_id,
-                checkpoint_ns,
-                checkpoint_id,
-                parent_checkpoint_id,
-                checkpoint,
-                metadata,
-            ) in cur:
-                wcur.execute(
-                    "SELECT task_id, channel, value FROM checkpoint_writes WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s ORDER BY task_id, idx",
-                    (thread_id, checkpoint_ns, checkpoint_id),
-                )
-                yield CheckpointTuple(
-                    _config(thread_id, checkpoint_ns, checkpoint_id),
-                    self.serde.loads(checkpoint),
-                    self.serde.loads(metadata),
-                    (
-                        _config(thread_id, checkpoint_ns, parent_checkpoint_id)
-                        if parent_checkpoint_id else None
-                    ),
-                    [
-                        (task_id, channel, self.serde.loads(value))
-                        for task_id, channel, value in wcur
-                    ],
-                )
+            _yield_checkpoint_write(self.serde, cur, wcur)
 
     def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
-        checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
+        _checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
         with self.cursor() as cur:
             if checkpoint_id := get_checkpoint_id(config):
-                sql = "SELECT thread_id, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM checkpoints WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s"
-                sql_params = (config["configurable"]["thread_id"], checkpoint_ns, checkpoint_id)
+                sql = "SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM checkpoints WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s"
+                sql_params = (config["configurable"]["thread_id"], _checkpoint_ns, checkpoint_id)
             else: # find the latest checkpoint for the thread_id
-                sql = "SELECT thread_id, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM checkpoints WHERE thread_id = %s AND checkpoint_ns = %s ORDER BY checkpoint_id DESC LIMIT 1"
-                sql_params = (config["configurable"]["thread_id"], checkpoint_ns)
+                sql = "SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM checkpoints WHERE thread_id = %s AND checkpoint_ns = %s ORDER BY checkpoint_id DESC LIMIT 1"
+                sql_params = (config["configurable"]["thread_id"], _checkpoint_ns)
             cur.execute(sql, sql_params)
             if _checkpoint := cur.fetchone():
                 (
                     thread_id,
+                    checkpoint_ns,
                     checkpoint_id,
                     parent_checkpoint_id,
                     checkpoint,
@@ -178,18 +156,15 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                     "SELECT task_id, channel, value FROM checkpoint_writes WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s ORDER BY task_id, idx",
                     (thread_id, checkpoint_ns, checkpoint_id),
                 )
-                return CheckpointTuple( # deserialize the checkpoint and metadata
-                    config,
-                    self.serde.loads(checkpoint),
-                    self.serde.loads(metadata),
-                    (
-                        _config(thread_id, checkpoint_ns, parent_checkpoint_id)
-                        if parent_checkpoint_id else None
-                    ),
-                    [
-                        (task_id, channel, self.serde.loads(_value))
-                        for task_id, channel, _value in cur
-                    ],
+                return _load_checkpoint_tuple(
+                    serde=self.serde,
+                    cur=cur,
+                    config=config,
+                    thread_id=thread_id,
+                    checkpoint=checkpoint,
+                    checkpoint_ns=checkpoint_ns,
+                    parent_checkpoint_id=parent_checkpoint_id,
+                    metadata=metadata,
                 )
 
     def put(
@@ -241,7 +216,61 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
             ])
 
 
-def search_where(
+def _load_checkpoint_tuple(
+    serde: SerializerProtocol,
+    cur: Cursor,
+    config: RunnableConfig,
+    thread_id: str,
+    checkpoint: str,
+    checkpoint_ns: str,
+    parent_checkpoint_id: str,
+    metadata: str,
+) -> CheckpointTuple:
+    return CheckpointTuple(
+        config,
+        serde.loads(checkpoint),
+        serde.loads(metadata),
+        (
+            _config(thread_id, checkpoint_ns, parent_checkpoint_id)
+            if parent_checkpoint_id else None
+        ),
+        [
+            (task_id, channel, serde.loads(_value))
+            for task_id, channel, _value in cur
+        ],
+    )
+
+
+def _yield_checkpoint_write(
+    serde: SerializerProtocol,
+    cur: Cursor,
+    wcur: Cursor,
+):
+    for (
+        thread_id,
+        checkpoint_ns,
+        checkpoint_id,
+        parent_checkpoint_id,
+        checkpoint,
+        metadata,
+    ) in cur:
+        wcur.execute(
+            "SELECT task_id, channel, value FROM checkpoint_writes WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s ORDER BY task_id, idx",
+            (thread_id, checkpoint_ns, checkpoint_id),
+        )
+        yield _load_checkpoint_tuple(
+            serde=serde,
+            cur=wcur,
+            config=_config(thread_id, checkpoint_ns, checkpoint_id),
+            thread_id=thread_id,
+            checkpoint=checkpoint,
+            checkpoint_ns=checkpoint_ns,
+            parent_checkpoint_id=parent_checkpoint_id,
+            metadata=metadata,
+        )
+
+
+def _search_where(
     config: Optional[RunnableConfig],
     before: Optional[RunnableConfig] = None,
 ) -> Tuple[str, Sequence[Any]]:
