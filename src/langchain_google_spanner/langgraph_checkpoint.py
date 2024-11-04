@@ -13,13 +13,13 @@
 # limitations under the License.
 
 """Cloud Spanner-based langgraph checkpointer"""
-from typing import Any, Iterator, Optional, Sequence, Tuple
-from contextlib import closing, contextmanager
 import threading
+from contextlib import closing, contextmanager
+from typing import Any, Iterator, Optional, Sequence, Tuple
 
+from google.cloud.spanner_dbapi import Cursor
 from langchain_core.load.dump import dumps
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.serde.base import SerializerProtocol
 from langgraph.checkpoint.base import (
     WRITES_IDX_MAP,
     BaseCheckpointSaver,
@@ -29,7 +29,7 @@ from langgraph.checkpoint.base import (
     CheckpointTuple,
     get_checkpoint_id,
 )
-from google.cloud.spanner_dbapi import Cursor
+from langgraph.checkpoint.serde.base import SerializerProtocol
 
 MetadataInput = Optional[dict[str, Any]]
 

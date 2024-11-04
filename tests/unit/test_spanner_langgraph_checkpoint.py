@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import json
 import operator
-import pytest
-import contextlib
 from typing import Annotated, Any, Iterator, List, Optional, Tuple, Union
 from unittest import mock
-from langchain_google_spanner import langgraph_checkpoint
-from langchain_google_spanner.langgraph_checkpoint import SpannerCheckpointSaver
+
+import pytest
+from google.auth import credentials as auth_credentials
+from google.cloud.spanner_dbapi import connection
 from langchain_core.runnables import RunnableConfig
 from langgraph.channels.base import BaseChannel
 from langgraph.checkpoint.base import (
@@ -32,9 +33,8 @@ from langgraph.checkpoint.base import (
 from langgraph.graph.graph import START
 from langgraph.graph.state import StateGraph
 
-from google.auth import credentials as auth_credentials
-from google.cloud.spanner_dbapi import connection
-
+from langchain_google_spanner import langgraph_checkpoint
+from langchain_google_spanner.langgraph_checkpoint import SpannerCheckpointSaver
 
 _TEST_CREDENTIALS = mock.Mock(spec=auth_credentials.AnonymousCredentials())
 _TEST_INSTANCE_ID = "test-instance-id"
