@@ -132,7 +132,7 @@ See the full `Chat Message History`_ tutorial.
 .. _`Chat Message History`: https://github.com/googleapis/langchain-google-spanner-python/blob/main/docs/chat_message_history.ipynb
 
 LangGraph Checkpointer Usage
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Use ``CheckpointSaver`` to store langgraph checkpoints.
 
