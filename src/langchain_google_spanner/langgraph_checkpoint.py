@@ -61,7 +61,9 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         autocommit: bool = True,
         connect_kwargs: Optional[dict[str, Any]] = None,
     ) -> None:
-        from google.cloud.spanner_dbapi.connection import connect  # type: ignore[import-untyped]
+        from google.cloud.spanner_dbapi.connection import (
+            connect,  # type: ignore[import-untyped]
+        )
 
         super().__init__()
         self.conn = connect(
