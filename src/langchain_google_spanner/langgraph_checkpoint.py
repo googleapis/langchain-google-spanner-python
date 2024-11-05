@@ -50,6 +50,27 @@ def _config(thread_id, checkpoint_ns, checkpoint_id) -> RunnableConfig:
 
 
 class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
+    CREATE_CHECKPOINT_DDL = """
+    CREATE TABLE IF NOT EXISTS checkpoints (
+        thread_id STRING(1024) NOT NULL,
+        checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
+        checkpoint_id STRING(1024) NOT NULL,
+        parent_checkpoint_id STRING(1024),
+        checkpoint STRING(MAX) NOT NULL,
+        metadata STRING(MAX) NOT NULL DEFAULT ('{}'),
+    ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id)
+    """
+    CREATE_CHECKPOINT_WRITES_DDL = """
+    CREATE TABLE IF NOT EXISTS checkpoint_writes (
+        thread_id STRING(1024) NOT NULL,
+        checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
+        checkpoint_id STRING(1024) NOT NULL,
+        task_id STRING(1024) NOT NULL,
+        idx INT64 NOT NULL,
+        channel STRING(1024) NOT NULL,
+        value STRING(MAX) NOT NULL,
+    ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
+    """
     lock: threading.Lock
 
     def __init__(
@@ -78,31 +99,8 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
 
     def setup(self) -> None:
         with self.cursor() as cur:
-            cur.execute(
-                """
-            CREATE TABLE IF NOT EXISTS checkpoints (
-                thread_id STRING(1024) NOT NULL,
-                checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
-                checkpoint_id STRING(1024) NOT NULL,
-                parent_checkpoint_id STRING(1024),
-                checkpoint STRING(MAX) NOT NULL,
-                metadata STRING(MAX) NOT NULL DEFAULT ('{}'),
-            ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id)
-            """
-            )
-            cur.execute(
-                """
-            CREATE TABLE IF NOT EXISTS checkpoint_writes (
-                thread_id STRING(1024) NOT NULL,
-                checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
-                checkpoint_id STRING(1024) NOT NULL,
-                task_id STRING(1024) NOT NULL,
-                idx INT64 NOT NULL,
-                channel STRING(1024) NOT NULL,
-                value STRING(MAX) NOT NULL,
-            ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
-            """
-            )
+            cur.execute(self.CREATE_CHECKPOINT_DDL)
+            cur.execute(self.CREATE_CHECKPOINT_WRITES_DDL)
 
     @contextmanager
     def cursor(self) -> Iterator[Cursor]:

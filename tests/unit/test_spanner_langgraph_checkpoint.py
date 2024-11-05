@@ -217,27 +217,8 @@ class TestSpannerLanggraphCheckpoint:
         )
         saver.setup()
         assert saver._cursor._execute_statements == [
-            """
-            CREATE TABLE IF NOT EXISTS checkpoints (
-                thread_id STRING(1024) NOT NULL,
-                checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
-                checkpoint_id STRING(1024) NOT NULL,
-                parent_checkpoint_id STRING(1024),
-                checkpoint STRING(MAX) NOT NULL,
-                metadata STRING(MAX) NOT NULL DEFAULT ('{}'),
-            ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id)
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS checkpoint_writes (
-                thread_id STRING(1024) NOT NULL,
-                checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
-                checkpoint_id STRING(1024) NOT NULL,
-                task_id STRING(1024) NOT NULL,
-                idx INT64 NOT NULL,
-                channel STRING(1024) NOT NULL,
-                value STRING(MAX) NOT NULL,
-            ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
-            """,
+            saver.CREATE_CHECKPOINT_DDL,
+            saver.CREATE_CHECKPOINT_WRITES_DDL,
         ]
 
     def test_put(self, dbapi_connect_mock) -> None:
