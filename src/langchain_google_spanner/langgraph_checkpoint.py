@@ -15,7 +15,7 @@
 """Cloud Spanner-based langgraph checkpointer"""
 import threading
 from contextlib import closing, contextmanager
-from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, Optional, Sequence, Tuple, TypedDict
 
 from google.cloud.spanner_dbapi import Cursor  # type: ignore[import-untyped]
 from langchain_core.load.dump import dumps
@@ -49,28 +49,12 @@ def _config(thread_id, checkpoint_ns, checkpoint_id) -> RunnableConfig:
     )
 
 
+class _SpannerTableNames(TypedDict):
+    checkpoints: str
+    checkpoint_writes: str
+
+
 class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
-    CREATE_CHECKPOINT_DDL = """
-    CREATE TABLE IF NOT EXISTS checkpoints (
-        thread_id STRING(1024) NOT NULL,
-        checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
-        checkpoint_id STRING(1024) NOT NULL,
-        parent_checkpoint_id STRING(1024),
-        checkpoint STRING(MAX) NOT NULL,
-        metadata STRING(MAX) NOT NULL DEFAULT ('{}'),
-    ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id)
-    """
-    CREATE_CHECKPOINT_WRITES_DDL = """
-    CREATE TABLE IF NOT EXISTS checkpoint_writes (
-        thread_id STRING(1024) NOT NULL,
-        checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
-        checkpoint_id STRING(1024) NOT NULL,
-        task_id STRING(1024) NOT NULL,
-        idx INT64 NOT NULL,
-        channel STRING(1024) NOT NULL,
-        value STRING(MAX) NOT NULL,
-    ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
-    """
     lock: threading.Lock
 
     def __init__(
@@ -78,6 +62,9 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         instance_id: str,
         database_id: str,
         project_id: str,
+        table_names: _SpannerTableNames = _SpannerTableNames(
+            checkpoints="checkpoints", checkpoint_writes="checkpoint_writes"
+        ),
         user_agent=USER_AGENT_CHECKPOINTER,
         autocommit: bool = True,
         connect_kwargs: Optional[dict[str, Any]] = None,
@@ -96,6 +83,32 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         )
         self.conn.autocommit = autocommit
         self.lock = threading.Lock()
+        self.table_names = table_names
+        self.CREATE_CHECKPOINT_DDL = (
+            f"CREATE TABLE IF NOT EXISTS {self.table_names['checkpoints']} ("
+            + """
+            thread_id STRING(1024) NOT NULL,
+            checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
+            checkpoint_id STRING(1024) NOT NULL,
+            parent_checkpoint_id STRING(1024),
+            checkpoint STRING(MAX) NOT NULL,
+            metadata STRING(MAX) NOT NULL DEFAULT ('{}'),
+        ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id)
+        """
+        )
+        self.CREATE_CHECKPOINT_WRITES_DDL = (
+            f"CREATE TABLE IF NOT EXISTS {self.table_names['checkpoint_writes']} ("
+            + """
+            thread_id STRING(1024) NOT NULL,
+            checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
+            checkpoint_id STRING(1024) NOT NULL,
+            task_id STRING(1024) NOT NULL,
+            idx INT64 NOT NULL,
+            channel STRING(1024) NOT NULL,
+            value STRING(MAX) NOT NULL,
+        ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
+        """
+        )
 
     def setup(self) -> None:
         with self.cursor() as cur:
@@ -129,7 +142,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
     ) -> Iterator[CheckpointTuple]:
         where, param_values = _search_where(config, before)
         query = f"""SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata
-        FROM checkpoints
+        FROM {self.table_names['checkpoints']}
         {where}
         ORDER BY checkpoint_id DESC"""
         if limit:
@@ -145,7 +158,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                 metadata,
             ) in cur:
                 wcur.execute(
-                    "SELECT task_id, channel, value FROM checkpoint_writes WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s ORDER BY task_id, idx",
+                    f"SELECT task_id, channel, value FROM {self.table_names['checkpoint_writes']} WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s ORDER BY task_id, idx",
                     (thread_id, checkpoint_ns, checkpoint_id),
                 )
                 yield _load_checkpoint_tuple(
@@ -163,14 +176,14 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         _checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
         with self.cursor() as cur:
             if checkpoint_id := get_checkpoint_id(config):
-                sql = "SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM checkpoints WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s"
+                sql = f"SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM {self.table_names['checkpoints']} WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s"
                 sql_params = (  # type: ignore[assignment]
                     config["configurable"]["thread_id"],
                     _checkpoint_ns,
                     checkpoint_id,
                 )
             else:  # find the latest checkpoint for the thread_id
-                sql = "SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM checkpoints WHERE thread_id = %s AND checkpoint_ns = %s ORDER BY checkpoint_id DESC LIMIT 1"
+                sql = f"SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata FROM {self.table_names['checkpoints']} WHERE thread_id = %s AND checkpoint_ns = %s ORDER BY checkpoint_id DESC LIMIT 1"
                 sql_params = (config["configurable"]["thread_id"], _checkpoint_ns)  # type: ignore[assignment]
             cur.execute(sql, sql_params)
             if _checkpoint := cur.fetchone():
@@ -185,7 +198,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                 if not get_checkpoint_id(config):
                     config = _config(thread_id, checkpoint_ns, checkpoint_id)
                 cur.execute(  # find any pending writes
-                    "SELECT task_id, channel, value FROM checkpoint_writes WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s ORDER BY task_id, idx",
+                    f"SELECT task_id, channel, value FROM {self.table_names['checkpoint_writes']} WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s ORDER BY task_id, idx",
                     (thread_id, checkpoint_ns, checkpoint_id),
                 )
                 return _load_checkpoint_tuple(
@@ -210,7 +223,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         checkpoint_ns = config["configurable"]["checkpoint_ns"]
         with self.cursor() as cur:
             cur.execute(
-                "INSERT OR UPDATE INTO checkpoints (thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata) VALUES (%s, %s, %s, %s, %s, %s)",
+                f"INSERT OR UPDATE INTO {self.table_names['checkpoints']} (thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata) VALUES (%s, %s, %s, %s, %s, %s)",
                 (
                     thread_id,
                     checkpoint_ns,
@@ -229,9 +242,9 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         task_id: str,
     ) -> None:
         query = (
-            "INSERT OR REPLACE INTO checkpoint_writes (thread_id, checkpoint_ns, checkpoint_id, task_id, idx, channel, value) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            f"INSERT OR REPLACE INTO {self.table_names['checkpoint_writes']} (thread_id, checkpoint_ns, checkpoint_id, task_id, idx, channel, value) VALUES (%s, %s, %s, %s, %s, %s, %s)"
             if all(w[0] in WRITES_IDX_MAP for w in writes)
-            else "INSERT OR IGNORE INTO checkpoint_writes (thread_id, checkpoint_ns, checkpoint_id, task_id, idx, channel, value) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            else f"INSERT OR IGNORE INTO {self.table_names['checkpoint_writes']} (thread_id, checkpoint_ns, checkpoint_id, task_id, idx, channel, value) VALUES (%s, %s, %s, %s, %s, %s, %s)"
         )
         with self.cursor() as cur:
             cur.executemany(

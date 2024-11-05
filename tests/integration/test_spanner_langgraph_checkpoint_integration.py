@@ -37,6 +37,10 @@ _TEST_CHECKPOINT = {
 }
 _TEST_WRITE_CONFIG = {"configurable": {"thread_id": "1", "checkpoint_ns": ""}}
 _TEST_READ_CONFIG = {"configurable": {"thread_id": "1"}}
+_TEST_TABLE_NAMES = {
+    "checkpoints": "checkpoints" + str(uuid.uuid4()).replace("-", "_"),
+    "checkpoint_writes": "checkpoint_writes" + str(uuid.uuid4()).replace("-", "_"),
+}
 
 
 @pytest.fixture(scope="module")
@@ -46,12 +50,13 @@ def setup():
             instance_id=instance_id,
             database_id=os.environ.get(env, ""),
             project_id=project_id,
+            table_names=_TEST_TABLE_NAMES,
         )
         checkpointer.setup()
         yield
         with checkpointer.cursor() as cur:
-            cur.execute("DROP TABLE IF EXISTS checkpoints")
-            cur.execute("DROP TABLE IF EXISTS checkpoint_writes")
+            for table_name in checkpointer.table_names:
+                cur.execute(f"DROP TABLE IF EXISTS {table_name}")
 
 
 def test_checkpointer(setup) -> None:
@@ -60,6 +65,7 @@ def test_checkpointer(setup) -> None:
             instance_id=instance_id,
             database_id=os.environ.get(env, ""),
             project_id=project_id,
+            table_names=_TEST_TABLE_NAMES,
         )
         checkpointer.put(_TEST_WRITE_CONFIG, _TEST_CHECKPOINT, {}, {})  # type: ignore[arg-type]
         checkpoint = checkpointer.get(_TEST_READ_CONFIG)  # type: ignore[arg-type]
