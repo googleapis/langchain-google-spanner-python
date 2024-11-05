@@ -48,10 +48,8 @@ def setup():
             project_id=project_id,
         )
         with checkpointer.cursor() as cur:
-            cur.executemany(
-                "DROP TABLE IF EXISTS %s",
-                ["checkpoints", "checkpoint_writes"],
-            )
+            cur.execute("DROP TABLE IF EXISTS %s", "checkpoints")
+            cur.execute("DROP TABLE IF EXISTS %s", "checkpoint_writes")
         checkpointer.setup()
 
 
