@@ -134,7 +134,7 @@ See the full `Chat Message History`_ tutorial.
 LangGraph Checkpointer Usage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Use ``CheckpointSaver`` to store langgraph checkpoints.
+Use ``SpannerCheckpointSaver`` to store langgraph checkpoints.
 
 .. code:: python
 
@@ -146,6 +146,10 @@ Use ``CheckpointSaver`` to store langgraph checkpoints.
         database_id="my-database",
         project_id="my-project",
     )
+
+See the full `LangGraph Checkpoint`_ tutorial.
+
+.. _`LangGraph Checkpoint`: https://github.com/googleapis/langchain-google-spanner-python/blob/main/docs/langgraph_checkpoint.ipynb
 
 Contributions
 ~~~~~~~~~~~~~
