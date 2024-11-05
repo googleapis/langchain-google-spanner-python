@@ -263,37 +263,28 @@ class TestSpannerLanggraphCheckpoint:
             project_id=_TEST_PROJECT_ID,
             connect_kwargs={"credentials": _TEST_CREDENTIALS},
         )
-        results1 = saver.list(self.config_1)
-        # print(f"[test_list] {results1=}")
-        # search_results_1 = list(results1)
-        # assert len(search_results_1) == 0
+        assert len(list(saver.list(self.config_1))) == 1
+        assert len(list(saver.list(self.config_2, limit=2))) == 1
+        assert len(list(saver.list(None, before=self.config_3))) == 1
 
-        results2 = saver.list(self.config_2, limit=1)
-        # print(f"[test_list] {results2=}")
-        # search_results_2 = list(results2)
-        # assert len(search_results_2) == 0
+    def test_search_where_none_config(self) -> None:
+        expected_predicate_1 = "WHERE checkpoint_id < %s"
+        expected_param_values_1 = ["1"]
+        assert langgraph_checkpoint._search_where(
+            config=None,
+            before=self.config_1,
+        ) == (
+            expected_predicate_1,
+            expected_param_values_1,
+        )
 
-        results3 = saver.list(None, before=self.config_3, limit=1)
-        # assert len(search_results_3) == 0
-
-    # def test_search_where_none_config(self) -> None:
-    #     expected_predicate_1 = "WHERE checkpoint_id < %s"
-    #     expected_param_values_1 = ["1"]
-    #     assert langgraph_checkpoint._search_where(
-    #         config=None,
-    #         before=self.config_1,
-    #     ) == (
-    #         expected_predicate_1,
-    #         expected_param_values_1,
-    #     )
-
-    # def test_search_where_none_before(self) -> None:
-    #     expected_predicate = "WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s"
-    #     expected_param_values = ["thread-1", "", "1"]
-    #     assert langgraph_checkpoint._search_where(config=self.config_1) == (
-    #         expected_predicate,
-    #         expected_param_values,
-    #     )
+    def test_search_where_none_before(self) -> None:
+        expected_predicate = "WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s"
+        expected_param_values = ["thread-1", "", "1"]
+        assert langgraph_checkpoint._search_where(config=self.config_1) == (
+            expected_predicate,
+            expected_param_values,
+        )
 
     def test_get_tuple(self, dbapi_connect_mock):
         saver = SpannerCheckpointSaver(

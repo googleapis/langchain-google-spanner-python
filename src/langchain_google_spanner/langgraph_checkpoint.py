@@ -121,7 +121,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
             finally:
                 cur.close()
 
-    def list(  # type: ignore[return]
+    def list(
         self,
         config: Optional[RunnableConfig],
         *,
@@ -138,7 +138,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
             query += f" LIMIT {limit}"
         with self.cursor() as cur, closing(self.conn.cursor()) as wcur:
             cur.execute(query, param_values)
-            _yield_checkpoint_write(self.serde, cur, wcur)
+            return _yield_checkpoint_write(self.serde, cur, wcur)
 
     def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:  # type: ignore[return]
         _checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
