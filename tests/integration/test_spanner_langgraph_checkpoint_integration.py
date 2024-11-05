@@ -47,13 +47,14 @@ def setup():
             database_id=os.environ.get(env, ""),
             project_id=project_id,
         )
+        checkpointer.setup()
+        yield
         with checkpointer.cursor() as cur:
             cur.execute("DROP TABLE IF EXISTS checkpoints")
             cur.execute("DROP TABLE IF EXISTS checkpoint_writes")
-        checkpointer.setup()
 
 
-def test_chat_message_history(setup) -> None:
+def test_checkpointer(setup) -> None:
     for env in ["GOOGLE_DATABASE"]:  # , "PG_DATABASE"]:
         checkpointer = SpannerCheckpointSaver(
             instance_id=instance_id,
