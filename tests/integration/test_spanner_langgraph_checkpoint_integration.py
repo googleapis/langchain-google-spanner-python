@@ -65,7 +65,7 @@ def test_checkpointer(setup) -> None:
             instance_id=instance_id,
             database_id=os.environ.get(env, ""),
             project_id=project_id,
-            table_names=_TEST_TABLE_NAMES,
+            table_names=_TEST_TABLE_NAMES,  # type: ignore[arg-type]
         )
         checkpointer.put(_TEST_WRITE_CONFIG, _TEST_CHECKPOINT, {}, {})  # type: ignore[arg-type]
         checkpoint = checkpointer.get(_TEST_READ_CONFIG)  # type: ignore[arg-type]
