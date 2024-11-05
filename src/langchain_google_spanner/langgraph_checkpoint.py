@@ -138,7 +138,28 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
             query += f" LIMIT {limit}"
         with self.cursor() as cur, closing(self.conn.cursor()) as wcur:
             cur.execute(query, param_values)
-            return _yield_checkpoint_write(self.serde, cur, wcur)
+            for (
+                thread_id,
+                checkpoint_ns,
+                checkpoint_id,
+                parent_checkpoint_id,
+                checkpoint,
+                metadata,
+            ) in cur:
+                wcur.execute(
+                    "SELECT task_id, channel, value FROM checkpoint_writes WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s ORDER BY task_id, idx",
+                    (thread_id, checkpoint_ns, checkpoint_id),
+                )
+                yield _load_checkpoint_tuple(
+                    serde=self.serde,
+                    cur=wcur,
+                    config=_config(thread_id, checkpoint_ns, checkpoint_id),
+                    thread_id=thread_id,
+                    checkpoint=checkpoint,
+                    checkpoint_ns=checkpoint_ns,
+                    parent_checkpoint_id=parent_checkpoint_id,
+                    metadata=metadata,
+                )
 
     def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:  # type: ignore[return]
         _checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
@@ -253,35 +274,6 @@ def _load_checkpoint_tuple(
         ),
         [(task_id, channel, serde.loads(_value)) for task_id, channel, _value in cur],
     )
-
-
-def _yield_checkpoint_write(
-    serde: SerializerProtocol,
-    cur: Cursor,
-    wcur: Cursor,
-):
-    for (
-        thread_id,
-        checkpoint_ns,
-        checkpoint_id,
-        parent_checkpoint_id,
-        checkpoint,
-        metadata,
-    ) in cur:
-        wcur.execute(
-            "SELECT task_id, channel, value FROM checkpoint_writes WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s ORDER BY task_id, idx",
-            (thread_id, checkpoint_ns, checkpoint_id),
-        )
-        yield _load_checkpoint_tuple(
-            serde=serde,
-            cur=wcur,
-            config=_config(thread_id, checkpoint_ns, checkpoint_id),
-            thread_id=thread_id,
-            checkpoint=checkpoint,
-            checkpoint_ns=checkpoint_ns,
-            parent_checkpoint_id=parent_checkpoint_id,
-            metadata=metadata,
-        )
 
 
 def _search_where(

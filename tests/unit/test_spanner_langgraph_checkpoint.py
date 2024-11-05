@@ -33,8 +33,7 @@ from langgraph.checkpoint.serde.types import ChannelProtocol
 from langgraph.graph.graph import START
 from langgraph.graph.state import StateGraph
 
-from langchain_google_spanner import langgraph_checkpoint
-from langchain_google_spanner.langgraph_checkpoint import SpannerCheckpointSaver
+from langchain_google_spanner import SpannerCheckpointSaver, langgraph_checkpoint
 
 _TEST_CREDENTIALS = mock.Mock(spec=auth_credentials.AnonymousCredentials())
 _TEST_INSTANCE_ID = "test-instance-id"
@@ -279,7 +278,9 @@ class TestSpannerLanggraphCheckpoint:
         )
 
     def test_search_where_none_before(self) -> None:
-        expected_predicate = "WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s"
+        expected_predicate = (
+            "WHERE thread_id = %s AND checkpoint_ns = %s AND checkpoint_id = %s"
+        )
         expected_param_values = ["thread-1", "", "1"]
         assert langgraph_checkpoint._search_where(config=self.config_1) == (
             expected_predicate,
@@ -314,36 +315,6 @@ class TestSpannerLanggraphCheckpoint:
             parent_config=_TEST_PARENT_CONFIG,
             pending_writes=[],
         )
-
-    def test_yield_checkpoint_write(self, dbapi_connect_mock):
-        saver = SpannerCheckpointSaver(
-            instance_id=_TEST_INSTANCE_ID,
-            database_id=_TEST_DATABASE_ID,
-            project_id=_TEST_PROJECT_ID,
-            connect_kwargs={"credentials": _TEST_CREDENTIALS},
-        )
-        results = list(
-            langgraph_checkpoint._yield_checkpoint_write(
-                saver.serde,
-                FakeCursor(_TEST_CURSOR_RETURN_VALUE),
-                FakeCursor(_TEST_CURSOR_WRITES_RETURN_VALUE),
-            )
-        )
-        assert results == [
-            CheckpointTuple(
-                config={
-                    "configurable": {
-                        "thread_id": self.config_1["configurable"]["thread_id"],
-                        "checkpoint_ns": self.config_1["configurable"]["checkpoint_ns"],
-                        "checkpoint_id": _TEST_CHECKPOINT_ID,
-                    }
-                },
-                checkpoint=_TEST_CHECKPOINT,
-                metadata=_TEST_CHECKPOINT_METADATA,
-                parent_config=_TEST_PARENT_CONFIG,
-                pending_writes=[("", "", {})],
-            )
-        ]
 
 
 # https://github.com/langchain-ai/langgraph/pull/2089#issuecomment-2417606590
