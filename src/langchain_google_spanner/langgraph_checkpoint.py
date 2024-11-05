@@ -55,17 +55,61 @@ class _SpannerTableNames(TypedDict):
 
 
 class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
+    """A checkpoint saver that stores LangGraph checkpoints in a Spanner database.
+
+    Checkpointers allow LangGraph agents to persist their state
+    within and across multiple interactions.
+
+    Args:
+        instance_id (str):
+            Required. The Spanner instance to use for saving checkpoints.
+        database_id (str):
+            Required. The Spanner database to use for saving checkpoints.
+        project_id (str):
+            Optional. The GCP project which owns the instances, tables and data.
+            If not provided, will attempt to determine from the environment.
+        table_names (dict[str, str]):
+            Optional. The Spanner table names to use for saving checkpoints, for example,
+            {"checkpoints": "chkpts", "checkpoint_writes": "chkpt_writes"} will
+            correspond to the table names "chkpts" and "chkpt_writes".
+        user_agent (str):
+            Optional. User agent to be used with this checkpointer's requests.
+        autocommit (bool):
+            Optional. A boolean indicating whether or not the connection is in autocommit mode.
+            Defaults to True.
+        connect_kwargs (dict[str, Any]):
+            Optional. Additional kwargs to provide to the DB API connection. Defaults to an
+            empty dictionary. See google.cloud.spanner_dbapi.connection.connect for details.
+
+    Examples:
+
+        >>> from langchain_google_spanner import SpannerCheckpointSaver
+        >>> from langgraph.graph import StateGraph
+        >>>
+        >>> builder = StateGraph(int)
+        >>> builder.add_node("add_one", lambda x: x + 1)
+        >>> builder.set_entry_point("add_one")
+        >>> builder.set_finish_point("add_one")
+        >>> checkpointer = SpannerCheckpointSaver(instance_id, database_id, project_id)
+        >>> graph = builder.compile(checkpointer=checkpointer)
+        >>> config = {"configurable": {"thread_id": "1"}}
+        >>> graph.get_state(config)
+        >>> result = graph.invoke(3, config)
+        >>> graph.get_state(config)
+        StateSnapshot(values=4, next=(), config={'configurable': {'thread_id': '1', 'checkpoint_ns': '', 'checkpoint_id': '0c62ca34-ac19-445d-bbb0-5b4984975b2a'}}, parent_config=None)
+    """  # noqa
+
     lock: threading.Lock
 
     def __init__(
         self,
         instance_id: str,
         database_id: str,
-        project_id: str,
+        project_id: Optional[str] = None,
         table_names: _SpannerTableNames = _SpannerTableNames(
             checkpoints="checkpoints", checkpoint_writes="checkpoint_writes"
         ),
-        user_agent=USER_AGENT_CHECKPOINTER,
+        user_agent: str = USER_AGENT_CHECKPOINTER,
         autocommit: bool = True,
         connect_kwargs: Optional[dict[str, Any]] = None,
     ) -> None:
@@ -111,6 +155,11 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         )
 
     def setup(self) -> None:
+        """Set up the checkpoint database.
+
+        This method creates the necessary tables in the Spanner database if they don't
+        already exist.
+        """
         with self.cursor() as cur:
             cur.execute(self.CREATE_CHECKPOINT_DDL)
             cur.execute(self.CREATE_CHECKPOINT_WRITES_DDL)
@@ -119,8 +168,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
     def cursor(self) -> Iterator[Cursor]:
         """Get a cursor for the Spanner database.
 
-        This method returns a cursor for the Spanner database. It is used internally
-        by SpannerSaver and should not be called directly by the user.
+        This method returns a cursor for the Spanner database.
 
         Yields:
             Cursor: A cursor for the Spanner database.
@@ -140,6 +188,37 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         before: Optional[RunnableConfig] = None,
         limit: Optional[int] = None,
     ) -> Iterator[CheckpointTuple]:
+        """List checkpoints from the Spanner database.
+
+        This method retrieves a list of checkpoint tuples from the Spanner database based
+        on the provided config. The checkpoints are ordered by checkpoint ID in descending order (newest first).
+
+        Args:
+            config (RunnableConfig): The config to use for listing the checkpoints.
+            filter (Optional[Dict[str, Any]]): Additional filtering criteria for metadata. Ignored for now.
+            before (Optional[RunnableConfig]): If provided, only checkpoints before the specified checkpoint ID are returned. Defaults to None.
+            limit (Optional[int]): The maximum number of checkpoints to return. Defaults to None.
+
+        Yields:
+            Iterator[CheckpointTuple]: An iterator of checkpoint tuples.
+
+        Examples:
+            >>> from langchain_google_spanner import SpannerCheckpointSaver
+            >>> checkpointer = SpannerCheckpointSaver(instance_id, database_id, project_id)
+            ... # Run a graph, then list the checkpoints
+            >>> config = {"configurable": {"thread_id": "1"}}
+            >>> checkpoints = list(checkpointer.list(config, limit=2))
+            >>> print(checkpoints)
+            [CheckpointTuple(...), CheckpointTuple(...)]
+
+            >>> config = {"configurable": {"thread_id": "1"}}
+            >>> before = {"configurable": {"checkpoint_id": "1ef4f797-8335-6428-8001-8a1503f9b875"}}
+            >>> checkpointer = SpannerCheckpointSaver(instance_id, database_id, project_id)
+            ... # Run a graph, then list the checkpoints
+            >>> checkpoints = list(checkpointer.list(config, before=before))
+            >>> print(checkpoints)
+            [CheckpointTuple(...), ...]
+        """
         where, param_values = _search_where(config, before)
         query = f"""SELECT thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id, checkpoint, metadata
         FROM {self.table_names['checkpoints']}
@@ -173,6 +252,42 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                 )
 
     def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:  # type: ignore[return]
+        """Get a checkpoint tuple from the Spanner database.
+
+        This method retrieves a checkpoint tuple from the Spanner database based on the
+        provided config. If the config contains a "checkpoint_id" key, the checkpoint with
+        the matching thread ID and checkpoint ID is retrieved. Otherwise, the latest checkpoint
+        for the given thread ID is retrieved.
+
+        Args:
+            config (RunnableConfig): The config to use for retrieving the checkpoint.
+
+        Returns:
+            Optional[CheckpointTuple]: The retrieved checkpoint tuple, or None if no matching checkpoint was found.
+
+        Examples:
+
+            Basic:
+            >>> from langchain_google_spanner import SpannerCheckpointSaver
+            >>> checkpointer = SpannerCheckpointSaver(instance_id, database_id, project_id)
+            >>> config = {"configurable": {"thread_id": "1"}}
+            >>> checkpoint_tuple = checkpointer.get_tuple(config)
+            >>> print(checkpoint_tuple)
+            CheckpointTuple(...)
+
+            With checkpoint ID:
+
+            >>> config = {
+            ...    "configurable": {
+            ...        "thread_id": "1",
+            ...        "checkpoint_ns": "",
+            ...        "checkpoint_id": "1ef4f797-8335-6428-8001-8a1503f9b875",
+            ...    }
+            ... }
+            >>> checkpoint_tuple = checkpointer.get_tuple(config)
+            >>> print(checkpoint_tuple)
+            CheckpointTuple(...)
+        """  # noqa
         _checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
         with self.cursor() as cur:
             if checkpoint_id := get_checkpoint_id(config):
@@ -219,6 +334,30 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
         metadata: CheckpointMetadata,
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
+        """Save a checkpoint to the Spanner database.
+
+        This method saves a checkpoint to the Spanner database. The checkpoint is associated
+        with the provided config and its parent config (if any).
+
+        Args:
+            config (RunnableConfig): The config to associate with the checkpoint.
+            checkpoint (Checkpoint): The checkpoint to save.
+            metadata (CheckpointMetadata): Additional metadata to save with the checkpoint.
+            new_versions (ChannelVersions): Ignored for now.
+
+        Returns:
+            RunnableConfig: Updated configuration after storing the checkpoint.
+
+        Examples:
+
+            >>> from langchain_google_spanner import SpannerCheckpointSaver
+            >>> checkpointer = SpannerCheckpointSaver(instance_id, database_id, project_id)
+            >>> config = {"configurable": {"thread_id": "1", "checkpoint_ns": ""}}
+            >>> checkpoint = {"ts": "2024-05-04T06:32:42.235444+00:00", "id": "1ef4f797-8335-6428-8001-8a1503f9b875", "channel_values": {"key": "value"}}
+            >>> saved_config = checkpointer.put(config, checkpoint, {"source": "input", "step": 1, "writes": {"key": "value"}}, {})
+            >>> print(saved_config)
+            {'configurable': {'thread_id': '1', 'checkpoint_ns': '', 'checkpoint_id': '1ef4f797-8335-6428-8001-8a1503f9b875'}}
+        """
         thread_id = config["configurable"]["thread_id"]
         checkpoint_ns = config["configurable"]["checkpoint_ns"]
         with self.cursor() as cur:
@@ -238,9 +377,18 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
     def put_writes(
         self,
         config: RunnableConfig,
-        writes: Sequence[tuple[str, Any]],
+        writes: Sequence[Tuple[str, Any]],
         task_id: str,
     ) -> None:
+        """Store intermediate writes linked to a checkpoint.
+
+        This method saves intermediate writes associated with a checkpoint to the Spanner database.
+
+        Args:
+            config (RunnableConfig): Configuration of the related checkpoint.
+            writes (Sequence[Tuple[str, Any]]): List of writes to store, each as (channel, value) pair.
+            task_id (str): Identifier for the task creating the writes.
+        """
         query = (
             f"INSERT OR REPLACE INTO {self.table_names['checkpoint_writes']} (thread_id, checkpoint_ns, checkpoint_id, task_id, idx, channel, value) VALUES (%s, %s, %s, %s, %s, %s, %s)"
             if all(w[0] in WRITES_IDX_MAP for w in writes)
