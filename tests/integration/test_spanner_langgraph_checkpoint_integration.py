@@ -26,36 +26,25 @@ _TEST_CHECKPOINT = {
     "v": 1,
     "ts": "2024-07-31T20:14:19.804150+00:00",
     "id": "1ef4f797-8335-6428-8001-8a1503f9b875",
-    "channel_values": {
-        "my_key": "meow",
-        "node": "node"
-    },
-    "channel_versions": {
-        "__start__": 2,
-        "my_key": 3,
-        "start:node": 3,
-        "node": 3
-    },
+    "channel_values": {"my_key": "meow", "node": "node"},
+    "channel_versions": {"__start__": 2, "my_key": 3, "start:node": 3, "node": 3},
     "versions_seen": {
         "__input__": {},
-        "__start__": {
-        "__start__": 1
-        },
-        "node": {
-        "start:node": 2
-        }
+        "__start__": {"__start__": 1},
+        "node": {"start:node": 2},
     },
     "pending_sends": [],
 }
 _TEST_WRITE_CONFIG = {"configurable": {"thread_id": "1", "checkpoint_ns": ""}}
 _TEST_READ_CONFIG = {"configurable": {"thread_id": "1"}}
 
+
 @pytest.fixture(scope="module")
 def setup():
-    for env in ["GOOGLE_DATABASE"]: #, "PG_DATABASE"]:
+    for env in ["GOOGLE_DATABASE"]:  # , "PG_DATABASE"]:
         checkpointer = SpannerCheckpointSaver(
             instance_id=instance_id,
-            database_id=os.environ.get(env),
+            database_id=os.environ.get(env, ""),
             project_id=project_id,
         )
         with checkpointer.cursor() as cur:
@@ -65,14 +54,15 @@ def setup():
             )
         checkpointer.setup()
 
+
 def test_chat_message_history(setup) -> None:
-    for env in ["GOOGLE_DATABASE"]: #, "PG_DATABASE"]:
+    for env in ["GOOGLE_DATABASE"]:  # , "PG_DATABASE"]:
         checkpointer = SpannerCheckpointSaver(
             instance_id=instance_id,
-            database_id=os.environ.get(env),
+            database_id=os.environ.get(env, ""),
             project_id=project_id,
         )
-        checkpointer.put(_TEST_WRITE_CONFIG, _TEST_CHECKPOINT, {}, {})
-        checkpoint = checkpointer.get(_TEST_READ_CONFIG)
+        checkpointer.put(_TEST_WRITE_CONFIG, _TEST_CHECKPOINT, {}, {})  # type: ignore[arg-type]
+        checkpoint = checkpointer.get(_TEST_READ_CONFIG)  # type: ignore[arg-type]
         assert checkpoint == _TEST_CHECKPOINT
-        assert len(list(checkpointer.list(_TEST_READ_CONFIG))) == 1
+        assert len(list(checkpointer.list(_TEST_READ_CONFIG))) == 1  # type: ignore[arg-type]
