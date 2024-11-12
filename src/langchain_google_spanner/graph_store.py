@@ -14,11 +14,10 @@
 
 from __future__ import annotations
 
-import datetime
 import re
 import string
 from abc import abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple
 
 from google.cloud import spanner
 from google.cloud.spanner_v1 import param_types
@@ -26,13 +25,7 @@ from langchain_community.graphs.graph_document import GraphDocument, Node, Relat
 from langchain_community.graphs.graph_store import GraphStore
 from requests.structures import CaseInsensitiveDict
 
-
-def to_identifier(s: str) -> str:
-    return "`" + s + "`"
-
-
-def to_identifiers(s: List[str]) -> str:
-    return map(to_identifier, s)
+from .type_utils import TypeUtility
 
 
 class NodeWrapper(object):
@@ -89,132 +82,40 @@ def partition_graph_docs(
     edges = CaseInsensitiveDict()
     for doc in graph_documents:
         for node in doc.nodes:
-            s = nodes.setdefault(node.type, set())
+            s = nodes.setdefault(node.type, dict())
             w = NodeWrapper(node)
             if w in s:
                 # Combine the properties for nodes with the same id.
-                n = next(filter(lambda v: v == w, s))
-                n.node.properties.update(node.properties)
+                s[w].properties.update(node.properties)
             else:
-                s.add(w)
+                s[w] = node
 
         for edge in doc.relationships:
             # Partition edges by the triplet because there could be edges with the
             # same type but between different types of nodes.
             edge_name = "{}_{}_{}".format(edge.source.type, edge.type, edge.target.type)
-            s = edges.setdefault(edge_name, set())
+            s = edges.setdefault(edge_name, dict())
             w = EdgeWrapper(edge)
             if w in s:
                 # Combine the properties for edges with the same id.
-                e = next(filter(lambda v: v == w, s))
-                e.edge.properties.update(edge.properties)
+                s[w].properties.update(edge.properties)
             else:
-                s.add(w)
-    return {name: [w.node for w in ws] for name, ws in nodes.items()}, {
-        name: [w.edge for w in ws] for name, ws in edges.items()
+                s[w] = edge
+    return {name: [n for _, n in ns.items()] for name, ns in nodes.items()}, {
+        name: [e for _, e in es.items()] for name, es in edges.items()
     }
-
-
-class TypeUtility(object):
-    @staticmethod
-    def spanner_type_to_schema_str(
-        t: param_types.Type,
-        include_type_annotations: bool = False,
-    ) -> str:
-        """Returns a Spanner string representation of a Spanner type.
-
-        Parameters:
-        - t: spanner.param_types.Type;
-        - include_type_annotations: boolean indicates whether to include type
-          annotations.
-
-        Returns:
-        - str: a Spanner string representation of a Spanner type.
-        """
-        if t.code == param_types.TypeCode.ARRAY:
-            return "ARRAY<{}>".format(
-                TypeUtility.spanner_type_to_schema_str(
-                    t.array_element_type,
-                    include_type_annotations=include_type_annotations,
-                )
-            )
-        if t.code == param_types.TypeCode.BOOL:
-            return "BOOL"
-        if t.code == param_types.TypeCode.INT64:
-            return "INT64"
-        if t.code == param_types.TypeCode.STRING:
-            return "STRING(MAX)" if include_type_annotations else "STRING"
-        if t.code == param_types.TypeCode.BYTES:
-            return "BYTES(MAX)" if include_type_annotations else "BYTES"
-        if t.code == param_types.TypeCode.FLOAT32:
-            return "FLOAT32"
-        if t.code == param_types.TypeCode.FLOAT64:
-            return "FLOAT64"
-        if t.code == param_types.TypeCode.TIMESTAMP:
-            return "TIMESTAMP"
-        raise ValueError("Unsupported type: %s" % t)
-
-    @staticmethod
-    def schema_str_to_spanner_type(s: str) -> param_types.Type:
-        """Returns a Spanner type corresponding to the string representation from Spanner schema type.
-
-        Parameters:
-        - s: string representation of a Spanner schema type.
-
-        Returns:
-        - Type[Any]: the corresponding Spanner type.
-        """
-        if s == "BOOL":
-            return param_types.BOOL
-        if s in ["INT64", "INT32"]:
-            return param_types.INT64
-        if s == "STRING":
-            return param_types.STRING
-        if s == "BYTES":
-            return param_types.BYTES
-        if s == "FLOAT64":
-            return param_types.FLOAT64
-        if s == "FLOAT32":
-            return param_types.FLOAT32
-        if s == "TIMESTAMP":
-            return param_types.TIMESTAMP
-        if s.startswith("ARRAY<") and s.endswith(">"):
-            return param_types.Array(
-                TypeUtility.schema_str_to_spanner_type(s[len("ARRAY<") : -len(">")])
-            )
-        raise ValueError("Unsupported type: %s" % s)
-
-    @staticmethod
-    def value_to_param_type(v: Any) -> param_types.Type:
-        """Returns a Spanner type corresponding to the python value.
-
-        Parameters:
-        - v: a python value.
-
-        Returns:
-        - Type[Any]: the corresponding Spanner type.
-        """
-        if isinstance(v, bool):
-            return param_types.BOOL
-        if isinstance(v, int):
-            return param_types.INT64
-        if isinstance(v, str):
-            return param_types.STRING
-        if isinstance(v, bytes):
-            return param_types.BYTES
-        if isinstance(v, float):
-            return param_types.FLOAT64
-        if isinstance(v, datetime.datetime):
-            return param_types.TIMESTAMP
-        if isinstance(v, list):
-            if len(v) == 0:
-                raise ValueError("Unknown element type of empty array")
-            return param_types.Array(TypeUtility.value_to_param_type(v[0]))
-        raise ValueError("Unsupported type of param: {}".format(v))
 
 
 class GraphDocumentUtility:
     """Utilities to process graph documents."""
+
+    @staticmethod
+    def to_identifier(s: str) -> str:
+        return "`" + s + "`"
+
+    @staticmethod
+    def to_identifiers(s: List[str]) -> str:
+        return map(GraphDocumentUtility.to_identifier, s)
 
     @staticmethod
     def fixup_identifier(s: str) -> str:
@@ -297,9 +198,9 @@ class ElementSchema(object):
                 for k, v in n.properties.items()
             }
         )
-        node.types[
-            ElementSchema.NODE_KEY_COLUMN_NAME
-        ] = TypeUtility.value_to_param_type(nodes[0].id)
+        node.types[ElementSchema.NODE_KEY_COLUMN_NAME] = (
+            TypeUtility.value_to_param_type(nodes[0].id)
+        )
         return node
 
     @staticmethod
@@ -350,12 +251,12 @@ class ElementSchema(object):
                 for k, v in e.properties.items()
             }
         )
-        edge.types[
-            ElementSchema.NODE_KEY_COLUMN_NAME
-        ] = TypeUtility.value_to_param_type(edges[0].source.id)
-        edge.types[
-            ElementSchema.TARGET_NODE_KEY_COLUMN_NAME
-        ] = TypeUtility.value_to_param_type(edges[0].target.id)
+        edge.types[ElementSchema.NODE_KEY_COLUMN_NAME] = (
+            TypeUtility.value_to_param_type(edges[0].source.id)
+        )
+        edge.types[ElementSchema.TARGET_NODE_KEY_COLUMN_NAME] = (
+            TypeUtility.value_to_param_type(edges[0].target.id)
+        )
 
         edge.source = NodeReference(
             edges[0].source.type,
@@ -417,6 +318,9 @@ class ElementSchema(object):
         Returns:
         - str: a string of CREATE TABLE ddl statement.
         """
+
+        to_identifier = GraphDocumentUtility.to_identifier
+        to_identifiers = GraphDocumentUtility.to_identifiers
         return """CREATE TABLE {} (
           {}{}
         ) PRIMARY KEY ({}){}
@@ -433,17 +337,21 @@ class ElementSchema(object):
                     for n, t in self.types.items()
                 )
             ),
-            ",\n                FOREIGN KEY ({}) REFERENCES {}({})".format(
-                ", ".join(to_identifiers(self.target.edge_keys)),
-                to_identifier(self.target.node_name),
-                ", ".join(to_identifiers(self.target.node_keys)),
-            )
-            if self.kind == "EDGE"
-            else "",
+            (
+                ",\n                FOREIGN KEY ({}) REFERENCES {}({})".format(
+                    ", ".join(to_identifiers(self.target.edge_keys)),
+                    to_identifier(self.target.node_name),
+                    ", ".join(to_identifiers(self.target.node_keys)),
+                )
+                if self.kind == "EDGE"
+                else ""
+            ),
             ",".join(to_identifiers(self.key_columns)),
-            ", INTERLEAVE IN PARENT {}".format(to_identifier(self.source.node_name))
-            if self.kind == "EDGE"
-            else "",
+            (
+                ", INTERLEAVE IN PARENT {}".format(to_identifier(self.source.node_name))
+                if self.kind == "EDGE"
+                else ""
+            ),
         )
 
     def evolve(self, new_schema: ElementSchema) -> List[str]:
@@ -497,6 +405,7 @@ class ElementSchema(object):
                         " expected {}".format(k, v, self.types[k])
                     )
 
+        to_identifier = GraphDocumentUtility.to_identifier
         ddls = [
             "ALTER TABLE {} ADD COLUMN {} {}".format(
                 to_identifier(self.base_table_name),
@@ -636,8 +545,37 @@ class SpannerGraphSchema(object):
         """
         return self.edges.get(name, None)
 
-    def get_property_type(self, name) -> param_types.Type:
+    def get_property_type(self, name: str) -> Optional[param_types.Type]:
+        """Gets the property type by name.
+
+        Parameters:
+        - name: the property name.
+
+        Returns:
+        - Optional[param_types.Type]: returns None if there is no such property.
+        """
         return self.properties.get(name, None)
+
+    def get_properties_as_struct_type(
+        self, properties: List[str]
+    ) -> param_types.Struct:
+        """Gets the struct type with properties as fields.
+
+        Parameters:
+        - properties: a list of property names.
+
+        Returns:
+        - param_types.Struct: a struct type with properties as fields.
+        """
+        struct_fields = []
+        for p in properties:
+            field_type = self.get_property_type(p)
+            if field_type is None:
+                raise ValueError("No property of given name `{}` found" % p)
+            field = param_types.StructField(p, field_type)
+            struct_fields.append(field)
+
+        return param_types.Struct(struct_fields)
 
     def __repr__(self) -> str:
         """Builds a string representation of the graph schema.
@@ -696,6 +634,8 @@ class SpannerGraphSchema(object):
         Returns:
         - str: a string of CREATE PROPERTY GRAPH ddl statement.
         """
+        to_identifier = GraphDocumentUtility.to_identifier
+        to_identifiers = GraphDocumentUtility.to_identifiers
 
         def construct_label_and_properties(
             target_label: str, labels: Dict[str], element: ElementSchema
@@ -1058,6 +998,11 @@ class SpannerGraphStore(GraphStore):
 
         properties.append(ElementSchema.NODE_KEY_COLUMN_NAME)
         node_schema = self.schema.get_node_schema(name)
+        if node_schema is None:
+            raise ValueError("No node schema of given name `{}` found" % name)
+
+        to_identifier = GraphDocumentUtility.to_identifier
+
         return (
             """INSERT OR UPDATE INTO {} ({})
            SELECT {} FROM UNNEST(@`nodes`) AS `node`""".format(
@@ -1068,12 +1013,7 @@ class SpannerGraphStore(GraphStore):
             {"nodes": param},
             {
                 "nodes": param_types.Array(
-                    param_types.Struct(
-                        [
-                            param_types.StructField(p, self.schema.get_property_type(p))
-                            for p in properties
-                        ]
-                    )
+                    self.schema.get_properties_as_struct_type(properties)
                 )
             },
         )
@@ -1109,6 +1049,10 @@ class SpannerGraphStore(GraphStore):
         properties.append(ElementSchema.NODE_KEY_COLUMN_NAME)
         properties.append(ElementSchema.TARGET_NODE_KEY_COLUMN_NAME)
         edge_schema = self.schema.get_edge_schema(name)
+        if edge_schema is None:
+            raise ValueError("No edge schema of given name `{}` found" % name)
+
+        to_identifier = GraphDocumentUtility.to_identifier
         return (
             """INSERT OR UPDATE INTO {} ({})
            SELECT {} FROM UNNEST(@`edges`) AS `edge`""".format(
@@ -1119,32 +1063,9 @@ class SpannerGraphStore(GraphStore):
             {"edges": param},
             {
                 "edges": param_types.Array(
-                    param_types.Struct(
-                        [
-                            param_types.StructField(p, self.schema.get_property_type(p))
-                            for p in properties
-                        ]
-                    )
+                    self.schema.get_properties_as_struct_type(properties)
                 )
             },
-        )
-        properties = [
-            (k, v)
-            for k, v in edge.properties.items()
-            if not isinstance(v, list) or len(v) != 0
-        ]
-        properties += [(ElementSchema.NODE_KEY_COLUMN_NAME, edge.source.id)]
-        properties += [(ElementSchema.TARGET_NODE_KEY_COLUMN_NAME, edge.target.id)]
-
-        edge_schema = self.schema.get_edge_schema(edge.type)
-        return (
-            """INSERT OR UPDATE INTO {} ({}) VALUES ({})""".format(
-                to_identifier(edge_schema.base_table_name),
-                ", ".join((to_identifier(k) for k, _ in properties)),
-                ", ".join(("@" + to_identifier(k) for k, _ in properties)),
-            ),
-            {k: v for k, v in properties},
-            {k: self.schema.get_property_type(k) for k, _ in properties},
         )
 
     def cleanup(self):
@@ -1154,6 +1075,7 @@ class SpannerGraphStore(GraphStore):
 
         The graph, tables and the associated data will all be removed.
         """
+        to_identifier = GraphDocumentUtility.to_identifier
         self.impl.apply_ddls(
             [
                 "DROP PROPERTY GRAPH IF EXISTS {}".format(
