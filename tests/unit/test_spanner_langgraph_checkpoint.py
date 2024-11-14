@@ -190,25 +190,25 @@ class TestSpannerLanggraphCheckpoint:
             }
         }
 
-        self.chkpnt_1: Checkpoint = JsonObject(empty_checkpoint())
-        self.chkpnt_2: Checkpoint = JsonObject(create_checkpoint(self.chkpnt_1, {}, 1))
-        self.chkpnt_3: Checkpoint = JsonObject(empty_checkpoint())
+        self.chkpnt_1: Checkpoint = JsonObject(empty_checkpoint())  # type: ignore[assignment]
+        self.chkpnt_2: Checkpoint = JsonObject(create_checkpoint(self.chkpnt_1, {}, 1))  # type: ignore[assignment]
+        self.chkpnt_3: Checkpoint = JsonObject(empty_checkpoint())  # type: ignore[assignment]
 
-        self.metadata_1: CheckpointMetadata = JsonObject(
+        self.metadata_1: CheckpointMetadata = JsonObject(  # type: ignore[assignment]
             {
                 "source": "input",
                 "step": 2,
                 "writes": {},
             }
         )
-        self.metadata_2: CheckpointMetadata = JsonObject(
+        self.metadata_2: CheckpointMetadata = JsonObject(  # type: ignore[assignment]
             {
                 "source": "loop",
                 "step": 1,
                 "writes": {"foo": "bar"},
             }
         )
-        self.metadata_3: CheckpointMetadata = JsonObject({})
+        self.metadata_3: CheckpointMetadata = JsonObject({})  # type: ignore[assignment]
 
     def test_setup(self, dbapi_connect_mock) -> None:
         saver = FakeCursorCheckpointer(
