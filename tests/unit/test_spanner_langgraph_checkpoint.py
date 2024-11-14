@@ -44,13 +44,15 @@ _TEST_CHECKPOINT_ID = "1ef97be6-668b-62a2-8003-9376ddec2770"
 _TEST_CHECKPOINT_NS = ""
 _TEST_PARENT_CHECKPOINT_ID = "1ef7b8c8-f35a-60de-8000-c1ac6a4bafd5"
 _TEST_THREAD_ID = "thread-1"
-_TEST_CHECKPOINT = JsonObject({
-    "id": _TEST_CHECKPOINT_ID,
-    "channel_values": {},
-    "channel_versions": {},
-    "pending_sends": [],
-    "versions_seen": {},
-})
+_TEST_CHECKPOINT = JsonObject(
+    {
+        "id": _TEST_CHECKPOINT_ID,
+        "channel_values": {},
+        "channel_versions": {},
+        "pending_sends": [],
+        "versions_seen": {},
+    }
+)
 _TEST_CHECKPOINT_METADATA = JsonObject({"step": 0})
 _TEST_PARENT_CONFIG = {
     "configurable": {
@@ -192,16 +194,20 @@ class TestSpannerLanggraphCheckpoint:
         self.chkpnt_2: Checkpoint = JsonObject(create_checkpoint(self.chkpnt_1, {}, 1))
         self.chkpnt_3: Checkpoint = JsonObject(empty_checkpoint())
 
-        self.metadata_1: CheckpointMetadata = JsonObject({
-            "source": "input",
-            "step": 2,
-            "writes": {},
-        })
-        self.metadata_2: CheckpointMetadata = JsonObject({
-            "source": "loop",
-            "step": 1,
-            "writes": {"foo": "bar"},
-        })
+        self.metadata_1: CheckpointMetadata = JsonObject(
+            {
+                "source": "input",
+                "step": 2,
+                "writes": {},
+            }
+        )
+        self.metadata_2: CheckpointMetadata = JsonObject(
+            {
+                "source": "loop",
+                "step": 1,
+                "writes": {"foo": "bar"},
+            }
+        )
         self.metadata_3: CheckpointMetadata = JsonObject({})
 
     def test_setup(self, dbapi_connect_mock) -> None:
