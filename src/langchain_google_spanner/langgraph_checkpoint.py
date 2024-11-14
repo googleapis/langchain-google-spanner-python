@@ -419,21 +419,24 @@ def _load_checkpoint_tuple(
     cur: Cursor,
     config: RunnableConfig,
     thread_id: str,
-    checkpoint: str,
+    checkpoint: JsonObject,
     checkpoint_ns: str,
     parent_checkpoint_id: str,
-    metadata: str,
+    metadata: JsonObject,
 ) -> CheckpointTuple:
     return CheckpointTuple(
         config,
-        serde.loads(checkpoint.serialize()),  # type: ignore[arg-type]
-        serde.loads(metadata.serialize()),  # type: ignore[arg-type]
+        serde.loads(checkpoint.serialize()),
+        serde.loads(metadata.serialize()),
         (
             _config(thread_id, checkpoint_ns, parent_checkpoint_id)
             if parent_checkpoint_id
             else None
         ),
-        [(task_id, channel, serde.loads(_value.serialize())) for task_id, channel, _value in cur],
+        [
+            (task_id, channel, serde.loads(_value.serialize()))
+            for task_id, channel, _value in cur
+        ],
     )
 
 
