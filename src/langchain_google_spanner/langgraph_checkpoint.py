@@ -31,6 +31,7 @@ from langgraph.checkpoint.base import (
     CheckpointTuple,
     get_checkpoint_id,
 )
+from langgraph.checkpoint.serde.base import SerializerProtocol
 
 MetadataInput = Optional[dict[str, Any]]
 
@@ -242,6 +243,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                     (thread_id, checkpoint_ns, checkpoint_id),
                 )
                 yield _load_checkpoint_tuple(
+                    serde=self.serde,
                     cur=wcur,
                     config=_config(thread_id, checkpoint_ns, checkpoint_id),
                     thread_id=thread_id,
@@ -317,6 +319,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                     (thread_id, checkpoint_ns, checkpoint_id),
                 )
                 return _load_checkpoint_tuple(
+                    serde=self.serde,
                     cur=cur,
                     config=config,
                     thread_id=thread_id,
@@ -412,6 +415,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
 
 
 def _load_checkpoint_tuple(
+    serde: SerializerProtocol,
     cur: Cursor,
     config: RunnableConfig,
     thread_id: str,
@@ -422,14 +426,14 @@ def _load_checkpoint_tuple(
 ) -> CheckpointTuple:
     return CheckpointTuple(
         config,
-        load(checkpoint),  # type: ignore[arg-type]
-        metadata,  # type: ignore[arg-type]
+        serde.loads(checkpoint.serialize()),  # type: ignore[arg-type]
+        serde.loads(metadata.serialize()),  # type: ignore[arg-type]
         (
             _config(thread_id, checkpoint_ns, parent_checkpoint_id)
             if parent_checkpoint_id
             else None
         ),
-        [(task_id, channel, load(_value)) for task_id, channel, _value in cur],
+        [(task_id, channel, serde.loads(_value.serialize())) for task_id, channel, _value in cur],
     )
 
 
