@@ -19,8 +19,8 @@ from typing import Any, Dict, Iterator, Optional, Sequence, Tuple, TypedDict
 
 from google.cloud.spanner_dbapi import Cursor  # type: ignore[import-untyped]
 from google.cloud.spanner_v1 import JsonObject
-from langchain_core.load.load import load
 from langchain_core.load.dump import dumpd
+from langchain_core.load.load import load
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
     WRITES_IDX_MAP,
