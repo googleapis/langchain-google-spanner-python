@@ -31,7 +31,6 @@ from langgraph.checkpoint.base import (
     CheckpointTuple,
     get_checkpoint_id,
 )
-from langgraph.checkpoint.serde.base import SerializerProtocol
 
 MetadataInput = Optional[dict[str, Any]]
 
@@ -243,7 +242,6 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                     (thread_id, checkpoint_ns, checkpoint_id),
                 )
                 yield _load_checkpoint_tuple(
-                    serde=self.serde,
                     cur=wcur,
                     config=_config(thread_id, checkpoint_ns, checkpoint_id),
                     thread_id=thread_id,
@@ -319,7 +317,6 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                     (thread_id, checkpoint_ns, checkpoint_id),
                 )
                 return _load_checkpoint_tuple(
-                    serde=self.serde,
                     cur=cur,
                     config=config,
                     thread_id=thread_id,
@@ -415,7 +412,6 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
 
 
 def _load_checkpoint_tuple(
-    serde: SerializerProtocol,
     cur: Cursor,
     config: RunnableConfig,
     thread_id: str,
