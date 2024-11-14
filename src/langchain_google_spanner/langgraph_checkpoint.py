@@ -18,7 +18,8 @@ from contextlib import closing, contextmanager
 from typing import Any, Dict, Iterator, Optional, Sequence, Tuple, TypedDict
 
 from google.cloud.spanner_dbapi import Cursor  # type: ignore[import-untyped]
-from langchain_core.load.dump import dumps
+from google.cloud.spanner_v1 import JsonObject
+from langchain_core.load.dump import dumpd
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
     WRITES_IDX_MAP,
@@ -135,8 +136,8 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
             checkpoint_ns STRING(1024) NOT NULL DEFAULT (''),
             checkpoint_id STRING(1024) NOT NULL,
             parent_checkpoint_id STRING(1024),
-            checkpoint STRING(MAX) NOT NULL,
-            metadata STRING(MAX) NOT NULL DEFAULT ('{}'),
+            checkpoint JSON NOT NULL,
+            metadata JSON NOT NULL DEFAULT (JSON '{}'),
         ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id)
         """
         )
@@ -149,7 +150,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
             task_id STRING(1024) NOT NULL,
             idx INT64 NOT NULL,
             channel STRING(1024) NOT NULL,
-            value STRING(MAX) NOT NULL,
+            value JSON NOT NULL,
         ) PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
         """
         )
@@ -368,8 +369,8 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                     checkpoint_ns,
                     checkpoint["id"],
                     config["configurable"].get("checkpoint_id"),
-                    dumps(checkpoint),
-                    dumps(metadata),
+                    JsonObject(dumpd(checkpoint)),
+                    JsonObject(dumpd(metadata)),
                 ),
             )
         return _config(thread_id, checkpoint_ns, checkpoint["id"])
@@ -405,7 +406,7 @@ class SpannerCheckpointSaver(BaseCheckpointSaver[str]):
                         task_id,
                         WRITES_IDX_MAP.get(channel, idx),
                         channel,
-                        dumps(value),
+                        JsonObject(dumpd(value)),
                     )
                     for idx, (channel, value) in enumerate(writes)
                 ],
