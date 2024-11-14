@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterator, Optional, Sequence, Tuple, TypedDict
 
 from google.cloud.spanner_dbapi import Cursor  # type: ignore[import-untyped]
 from google.cloud.spanner_v1 import JsonObject
+from langchain_core.load.load import load
 from langchain_core.load.dump import dumpd
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
@@ -425,14 +426,14 @@ def _load_checkpoint_tuple(
 ) -> CheckpointTuple:
     return CheckpointTuple(
         config,
-        serde.loads(checkpoint),  # type: ignore[arg-type]
-        serde.loads(metadata),  # type: ignore[arg-type]
+        load(checkpoint),  # type: ignore[arg-type]
+        metadata,  # type: ignore[arg-type]
         (
             _config(thread_id, checkpoint_ns, parent_checkpoint_id)
             if parent_checkpoint_id
             else None
         ),
-        [(task_id, channel, serde.loads(_value)) for task_id, channel, _value in cur],
+        [(task_id, channel, load(_value)) for task_id, channel, _value in cur],
     )
 
 
