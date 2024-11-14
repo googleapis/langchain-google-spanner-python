@@ -18,6 +18,7 @@ import datetime
 from google.cloud.spanner_v1 import param_types
 from typing import Any
 
+
 class TypeUtility(object):
     """A utiltiy class with helper functions that do type conversions related to Spanner."""
 
