@@ -15,8 +15,9 @@
 from __future__ import annotations
 
 import datetime
-from google.cloud.spanner_v1 import param_types
 from typing import Any
+
+from google.cloud.spanner_v1 import param_types
 
 
 class TypeUtility(object):
