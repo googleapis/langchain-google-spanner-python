@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 import string
 from abc import abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
 from google.cloud import spanner
 from google.cloud.spanner_v1 import param_types
@@ -68,7 +68,7 @@ class EdgeWrapper(object):
 
 def partition_graph_docs(
     graph_documents: List[GraphDocument],
-) -> Tuple(dict, dict):
+) -> Tuple[dict, dict]:
     """Returns nodes and edges grouped by the type.
 
     Parameters:
@@ -78,29 +78,29 @@ def partition_graph_docs(
     - A tuple of two dictionaries. The first is nodes grouped by node types,
       the second is edges grouped by edge types.
     """
-    nodes = CaseInsensitiveDict()
-    edges = CaseInsensitiveDict()
+    nodes: CaseInsensitiveDict[dict[NodeWrapper, Node]] = CaseInsensitiveDict()
+    edges: CaseInsensitiveDict[dict[EdgeWrapper, Relationship]] = CaseInsensitiveDict()
     for doc in graph_documents:
         for node in doc.nodes:
-            s = nodes.setdefault(node.type, dict())
-            w = NodeWrapper(node)
-            if w in s:
+            ns = nodes.setdefault(node.type, dict())
+            nw = NodeWrapper(node)
+            if nw in ns:
                 # Combine the properties for nodes with the same id.
-                s[w].properties.update(node.properties)
+                ns[nw].properties.update(node.properties)
             else:
-                s[w] = node
+                ns[nw] = node
 
         for edge in doc.relationships:
             # Partition edges by the triplet because there could be edges with the
             # same type but between different types of nodes.
             edge_name = "{}_{}_{}".format(edge.source.type, edge.type, edge.target.type)
-            s = edges.setdefault(edge_name, dict())
-            w = EdgeWrapper(edge)
-            if w in s:
+            es = edges.setdefault(edge_name, dict())
+            ew = EdgeWrapper(edge)
+            if ew in es:
                 # Combine the properties for edges with the same id.
-                s[w].properties.update(edge.properties)
+                es[ew].properties.update(edge.properties)
             else:
-                s[w] = edge
+                es[ew] = edge
     return {name: [n for _, n in ns.items()] for name, ns in nodes.items()}, {
         name: [e for _, e in es.items()] for name, es in edges.items()
     }
@@ -114,7 +114,7 @@ class GraphDocumentUtility:
         return "`" + s + "`"
 
     @staticmethod
-    def to_identifiers(s: List[str]) -> str:
+    def to_identifiers(s: List[str]) -> Iterable[str]:
         return map(GraphDocumentUtility.to_identifier, s)
 
     @staticmethod
@@ -161,6 +161,16 @@ class ElementSchema(object):
 
     NODE_KEY_COLUMN_NAME: str = "id"
     TARGET_NODE_KEY_COLUMN_NAME: str = "target_id"
+
+    name: str
+    kind: str
+    key_columns: List[str]
+    base_table_name: str
+    labels: List[str]
+    properties: CaseInsensitiveDict[str]
+    types: CaseInsensitiveDict[param_types.Type]
+    source: NodeReference
+    target: NodeReference
 
     @staticmethod
     def from_nodes(name: str, nodes: List[Node]) -> ElementSchema:
@@ -272,7 +282,8 @@ class ElementSchema(object):
 
     @staticmethod
     def from_info_schema(
-        element_schema: Dict[str, Any], property_decls: Dict[str, Any]
+        element_schema: Dict[str, Any],
+        property_decls: List[Any],
     ) -> ElementSchema:
         """Builds ElementSchema from information schema represenation of an element.
 
@@ -290,14 +301,18 @@ class ElementSchema(object):
         element.key_columns = element_schema["keyColumns"]
         element.base_table_name = element_schema["baseTableName"]
         element.labels = element_schema["labelNames"]
-        element.properties = {
-            prop_def["propertyDeclarationName"]: prop_def["valueExpressionSql"]
-            for prop_def in element_schema["propertyDefinitions"]
-        }
-        element.types = {
-            decl["name"]: TypeUtility.schema_str_to_spanner_type(decl["type"])
-            for decl in property_decls
-        }
+        element.properties = CaseInsensitiveDict(
+            {
+                prop_def["propertyDeclarationName"]: prop_def["valueExpressionSql"]
+                for prop_def in element_schema["propertyDefinitions"]
+            }
+        )
+        element.types = CaseInsensitiveDict(
+            {
+                decl["name"]: TypeUtility.schema_str_to_spanner_type(decl["type"])
+                for decl in property_decls
+            }
+        )
 
         if element.kind == "EDGE":
             element.source = NodeReference(
@@ -454,11 +469,11 @@ class SpannerGraphSchema(object):
         Parameters:
         - graph_name: the name of the graph.
         """
-        self.graph_name = graph_name
-        self.nodes = CaseInsensitiveDict({})
-        self.edges = CaseInsensitiveDict({})
-        self.labels = CaseInsensitiveDict({})
-        self.properties = CaseInsensitiveDict({})
+        self.graph_name: str = graph_name
+        self.nodes: CaseInsensitiveDict[ElementSchema] = CaseInsensitiveDict({})
+        self.edges: CaseInsensitiveDict[ElementSchema] = CaseInsensitiveDict({})
+        self.labels: CaseInsensitiveDict[Label] = CaseInsensitiveDict({})
+        self.properties: CaseInsensitiveDict[param_types.Type] = CaseInsensitiveDict({})
 
     def evolve(self, graph_documents: List[GraphDocument]) -> List[str]:
         """Evolves current schema into a schema representing the input documents.
@@ -556,9 +571,7 @@ class SpannerGraphSchema(object):
         """
         return self.properties.get(name, None)
 
-    def get_properties_as_struct_type(
-        self, properties: List[str]
-    ) -> param_types.Struct:
+    def get_properties_as_struct_type(self, properties: List[str]) -> param_types.Type:
         """Gets the struct type with properties as fields.
 
         Parameters:
@@ -571,7 +584,7 @@ class SpannerGraphSchema(object):
         for p in properties:
             field_type = self.get_property_type(p)
             if field_type is None:
-                raise ValueError("No property of given name `{}` found" % p)
+                raise ValueError("No property of given name `%s` found" % p)
             field = param_types.StructField(p, field_type)
             struct_fields.append(field)
 
@@ -638,7 +651,9 @@ class SpannerGraphSchema(object):
         to_identifiers = GraphDocumentUtility.to_identifiers
 
         def construct_label_and_properties(
-            target_label: str, labels: Dict[str], element: ElementSchema
+            target_label: str,
+            labels: CaseInsensitiveDict[Label],
+            element: ElementSchema,
         ) -> str:
             props = labels[target_label].prop_names
             defs = [
@@ -652,7 +667,7 @@ class SpannerGraphSchema(object):
 
         def construct_label_and_properties_list(
             target_labels: List[str],
-            labels: Dict[str, Label],
+            labels: CaseInsensitiveDict[Label],
             element: ElementSchema,
         ) -> str:
             return "\n".join(
@@ -679,7 +694,7 @@ class SpannerGraphSchema(object):
             )
 
         def constuct_element_table(
-            element: ElementSchema, labels: Dict[str, Label]
+            element: ElementSchema, labels: CaseInsensitiveDict[Label]
         ) -> str:
             definition = [
                 "{} AS {}".format(
@@ -910,12 +925,16 @@ class SpannerGraphStore(GraphStore):
 
         nodes, edges = partition_graph_docs(graph_documents)
         for name, elements in nodes.items():
+            if len(elements) == 0:
+                continue
             dml, params, types = self._add_nodes_query(name, elements)
 
             print("Insert nodes of type `{}`...".format(name))
             self.impl.apply_dml(dml, params=params, param_types=types)
 
         for name, elements in edges.items():
+            if len(elements) == 0:
+                continue
             dml, params, types = self._add_edges_query(name, elements)
 
             print("Insert edges of type `{}`...".format(name))
@@ -971,7 +990,7 @@ class SpannerGraphStore(GraphStore):
 
     def _add_nodes_query(
         self, name: str, nodes: List[Node]
-    ) -> (str, Dict[str, Any], Dict[str, param_types.Type]):
+    ) -> Tuple[str, Dict[str, Any], Dict[str, param_types.Type]]:
         """Builds the statement to add a list of nodes to Spanner.
 
         Parameters:
@@ -984,7 +1003,7 @@ class SpannerGraphStore(GraphStore):
           - Dict[str, param_types.Type]: Parameter types.
         """
         if len(nodes) == 0:
-            return
+            raise ValueError("Empty list of nodes")
 
         properties = list(
             set({k for node in nodes for k, v in node.properties.items()})
@@ -999,7 +1018,7 @@ class SpannerGraphStore(GraphStore):
         properties.append(ElementSchema.NODE_KEY_COLUMN_NAME)
         node_schema = self.schema.get_node_schema(name)
         if node_schema is None:
-            raise ValueError("No node schema of given name `{}` found" % name)
+            raise ValueError("No node schema of given name `%s` found" % name)
 
         to_identifier = GraphDocumentUtility.to_identifier
 
@@ -1020,7 +1039,7 @@ class SpannerGraphStore(GraphStore):
 
     def _add_edges_query(
         self, name: str, edges: List[Relationship]
-    ) -> (str, Dict[str, Any], Dict[str, param_types.Type]):
+    ) -> Tuple[str, Dict[str, Any], Dict[str, param_types.Type]]:
         """Builds the statement to add a list of edges to Spanner.
 
         Parameters:
@@ -1033,7 +1052,7 @@ class SpannerGraphStore(GraphStore):
           - Dict[str, param_types.Type]: Parameter types.
         """
         if len(edges) == 0:
-            return
+            raise ValueError("Empty list of edges")
 
         properties = list(
             set({k for edge in edges for k, v in edge.properties.items()})
@@ -1050,7 +1069,7 @@ class SpannerGraphStore(GraphStore):
         properties.append(ElementSchema.TARGET_NODE_KEY_COLUMN_NAME)
         edge_schema = self.schema.get_edge_schema(name)
         if edge_schema is None:
-            raise ValueError("No edge schema of given name `{}` found" % name)
+            raise ValueError("No edge schema of given name `%s` found" % name)
 
         to_identifier = GraphDocumentUtility.to_identifier
         return (

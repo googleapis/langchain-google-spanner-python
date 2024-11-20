@@ -18,7 +18,7 @@ import os
 import random
 import string
 
-from google.cloud.spanner import Client
+from google.cloud.spanner import Client  # type: ignore
 from langchain_community.graphs.graph_document import GraphDocument, Node, Relationship
 from langchain_core.documents import Document
 
