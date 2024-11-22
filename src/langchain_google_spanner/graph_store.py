@@ -27,6 +27,8 @@ from requests.structures import CaseInsensitiveDict
 
 from .type_utils import TypeUtility
 
+MUTATION_BATCH_SIZE = 1000
+
 
 class NodeWrapper(object):
     """Wrapper around Node to support set operations using node id"""
@@ -837,41 +839,21 @@ class SpannerImpl(object):
         print("Waiting for DDL operations to complete...")
         return op.result(options.get("timeout", 60))
 
-    def apply_dml(self, dml: str, params: dict = {}, param_types: dict = {}) -> None:
-        """Applies a data modification statement.
+    def insert_or_update(
+        self, table: str, columns: List[str], values: List[List[Any]]
+    ) -> None:
+        """Insert or update the table.
 
         Parameters:
-        - dml: Spanner Schema DML;
-        - params: Parameters
+        - table: Spanner table name;
+        - columns: list of column names;
+        - values: list of values.
         """
 
-        def _apply_dml(transaction):
-            row_cnt = transaction.execute_update(
-                dml, params=params, param_types=param_types
-            )
-            print("Executed DML statement: {} rows updated".format(row_cnt))
-
-        self.database.run_in_transaction(_apply_dml)
-
-    def apply_dmls(self, dmls: List[str]) -> None:
-        """Applies a list of data modifications.
-
-        Parameters:
-        - dmls: Spanner Schema DMLs.
-        """
-
-        if not dmls:
-            return
-
-        def _apply_dmls(transaction):
-            status, row_cnts = transaction.batch_update(dmls)
-            print(
-                "Executed {} DML statements, {} rows updated: status: {}".format(
-                    len(row_cnts), sum(row_cnts), status
-                )
-            )
-
-        self.database.run_in_transaction(_apply_dmls)
+        for i in range(0, len(values), MUTATION_BATCH_SIZE):
+            value_batch = values[i : i + MUTATION_BATCH_SIZE]
+            with self.database.batch() as batch:
+                batch.insert_or_update(table=table, columns=columns, values=value_batch)
 
 
 class SpannerGraphStore(GraphStore):
@@ -927,18 +909,18 @@ class SpannerGraphStore(GraphStore):
         for name, elements in nodes.items():
             if len(elements) == 0:
                 continue
-            dml, params, types = self._add_nodes_query(name, elements)
+            table, columns, rows = self._add_nodes(name, elements)
 
             print("Insert nodes of type `{}`...".format(name))
-            self.impl.apply_dml(dml, params=params, param_types=types)
+            self.impl.insert_or_update(table, columns, rows)
 
         for name, elements in edges.items():
             if len(elements) == 0:
                 continue
-            dml, params, types = self._add_edges_query(name, elements)
+            table, columns, rows = self._add_edges(name, elements)
 
             print("Insert edges of type `{}`...".format(name))
-            self.impl.apply_dml(dml, params=params, param_types=types)
+            self.impl.insert_or_update(table, columns, rows)
 
     def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
         """Query Spanner database.
@@ -988,104 +970,63 @@ class SpannerGraphStore(GraphStore):
 
         self.schema.from_information_schema(results[0]["property_graph_metadata_json"])
 
-    def _add_nodes_query(
+    def _add_nodes(
         self, name: str, nodes: List[Node]
-    ) -> Tuple[str, Dict[str, Any], Dict[str, param_types.Type]]:
-        """Builds the statement to add a list of nodes to Spanner.
+    ) -> Tuple[str, List[str], List[List[Any]]]:
+        """Builds the data required to add a list of nodes to Spanner.
 
         Parameters:
           - name: type of name;
           - nodes: a list of Nodes.
 
         Returns:
-          - str: a Spanner DML statement;
-          - Dict[str, Any]: Parameters.
-          - Dict[str, param_types.Type]: Parameter types.
+          - str: a table name;
+          - List[str]: a list of column names;
+          - List[List[Any]]: a list of rows.
         """
         if len(nodes) == 0:
             raise ValueError("Empty list of nodes")
 
-        properties = list(
-            set({k for node in nodes for k, v in node.properties.items()})
-        )
+        columns = list(set({k for node in nodes for k, v in node.properties.items()}))
 
-        param = []
+        rows = []
         for node in nodes:
-            node_param = [node.properties.get(k, None) for k in properties]
-            node_param.append(node.id)
-            param.append(tuple(node_param))
+            row = [node.properties.get(k, None) for k in columns]
+            row.append(node.id)
+            rows.append(row)
 
-        properties.append(ElementSchema.NODE_KEY_COLUMN_NAME)
-        node_schema = self.schema.get_node_schema(name)
-        if node_schema is None:
-            raise ValueError("No node schema of given name `%s` found" % name)
+        columns.append(ElementSchema.NODE_KEY_COLUMN_NAME)
+        return name, columns, rows
 
-        to_identifier = GraphDocumentUtility.to_identifier
-
-        return (
-            """INSERT OR UPDATE INTO {} ({})
-           SELECT {} FROM UNNEST(@`nodes`) AS `node`""".format(
-                to_identifier(node_schema.base_table_name),
-                ", ".join((to_identifier(k) for k in properties)),
-                ", ".join(("`node`." + to_identifier(k) for k in properties)),
-            ),
-            {"nodes": param},
-            {
-                "nodes": param_types.Array(
-                    self.schema.get_properties_as_struct_type(properties)
-                )
-            },
-        )
-
-    def _add_edges_query(
+    def _add_edges(
         self, name: str, edges: List[Relationship]
-    ) -> Tuple[str, Dict[str, Any], Dict[str, param_types.Type]]:
-        """Builds the statement to add a list of edges to Spanner.
+    ) -> Tuple[str, List[str], List[List[Any]]]:
+        """Builds the data required to add a list of edges to Spanner.
 
         Parameters:
           - name: type of edge;
           - edges: a list of Relationships.
 
         Returns:
-          - str: a Spanner DML statement.
-          - Dict[str, Any]: Parameters.
-          - Dict[str, param_types.Type]: Parameter types.
+          - str: a table name;
+          - List[str]: a list of column names;
+          - List[List[Any]]: a list of rows.
         """
         if len(edges) == 0:
             raise ValueError("Empty list of edges")
 
-        properties = list(
-            set({k for edge in edges for k, v in edge.properties.items()})
-        )
+        columns = list(set({k for edge in edges for k, v in edge.properties.items()}))
 
-        param = []
+        rows = []
         for edge in edges:
-            edge_param = [edge.properties.get(k, None) for k in properties]
-            edge_param.append(edge.source.id)
-            edge_param.append(edge.target.id)
-            param.append(tuple(edge_param))
+            row = [edge.properties.get(k, None) for k in columns]
+            row.append(edge.source.id)
+            row.append(edge.target.id)
+            rows.append(row)
 
-        properties.append(ElementSchema.NODE_KEY_COLUMN_NAME)
-        properties.append(ElementSchema.TARGET_NODE_KEY_COLUMN_NAME)
-        edge_schema = self.schema.get_edge_schema(name)
-        if edge_schema is None:
-            raise ValueError("No edge schema of given name `%s` found" % name)
-
-        to_identifier = GraphDocumentUtility.to_identifier
-        return (
-            """INSERT OR UPDATE INTO {} ({})
-           SELECT {} FROM UNNEST(@`edges`) AS `edge`""".format(
-                to_identifier(edge_schema.base_table_name),
-                ", ".join((to_identifier(k) for k in properties)),
-                ", ".join(("`edge`." + to_identifier(k) for k in properties)),
-            ),
-            {"edges": param},
-            {
-                "edges": param_types.Array(
-                    self.schema.get_properties_as_struct_type(properties)
-                )
-            },
-        )
+        columns.append(ElementSchema.NODE_KEY_COLUMN_NAME)
+        columns.append(ElementSchema.TARGET_NODE_KEY_COLUMN_NAME)
+        return name, columns, rows
 
     def cleanup(self):
         """Removes all data from your Spanner Graph.
