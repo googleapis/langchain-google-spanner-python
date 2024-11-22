@@ -306,7 +306,7 @@ class ElementSchema(object):
         element.properties = CaseInsensitiveDict(
             {
                 prop_def["propertyDeclarationName"]: prop_def["valueExpressionSql"]
-                for prop_def in element_schema["propertyDefinitions"]
+                for prop_def in element_schema.get("propertyDefinitions", [])
             }
         )
         element.types = CaseInsensitiveDict(
@@ -509,26 +509,23 @@ class SpannerGraphSchema(object):
         Parameters:
         - info_schema: the information schema represenation of a graph;
         """
+        property_decls = info_schema.get("propertyDeclarations", [])
         self.nodes = CaseInsensitiveDict(
             {
-                node["name"]: ElementSchema.from_info_schema(
-                    node, info_schema["propertyDeclarations"]
-                )
+                node["name"]: ElementSchema.from_info_schema(node, property_decls)
                 for node in info_schema["nodeTables"]
             }
         )
         self.edges = CaseInsensitiveDict(
             {
-                edge["name"]: ElementSchema.from_info_schema(
-                    edge, info_schema["propertyDeclarations"]
-                )
+                edge["name"]: ElementSchema.from_info_schema(edge, property_decls)
                 for edge in info_schema.get("edgeTables", [])
             }
         )
         self.labels = CaseInsensitiveDict(
             {
                 label["name"]: Label(
-                    label["name"], set(label["propertyDeclarationNames"])
+                    label["name"], set(label.get("propertyDeclarationNames", []))
                 )
                 for label in info_schema["labels"]
             }
@@ -536,7 +533,7 @@ class SpannerGraphSchema(object):
         self.properties = CaseInsensitiveDict(
             {
                 decl["name"]: TypeUtility.schema_str_to_spanner_type(decl["type"])
-                for decl in info_schema["propertyDeclarations"]
+                for decl in property_decls
             }
         )
 

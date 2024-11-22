@@ -81,7 +81,7 @@ class TypeUtility(object):
             return param_types.BYTES
         if s == "FLOAT64":
             return param_types.FLOAT64
-        if s == "FLOAT32":
+        if s == "FLOAT32" or s == "FLOAT":
             return param_types.FLOAT32
         if s == "TIMESTAMP":
             return param_types.TIMESTAMP

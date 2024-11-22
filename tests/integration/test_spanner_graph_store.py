@@ -252,10 +252,6 @@ class TestSpannerGraphStore:
             )
             assert len(results) == 1
 
-            print(set(edge0.properties.keys()))
-            print(set(edge1.properties.keys()))
-            print(set(results[0]["properties"].keys()))
-
             edge_properties = edge0.properties
             edge_properties.update(edge1.properties)
             missing_properties = set(edge_properties.keys()).difference(
