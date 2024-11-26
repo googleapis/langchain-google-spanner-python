@@ -14,6 +14,7 @@
 
 from langchain_google_spanner.chat_message_history import SpannerChatMessageHistory
 from langchain_google_spanner.graph_store import SpannerGraphStore
+from langchain_google_spanner.graph_qa import SpannerGraphQAChain
 from langchain_google_spanner.vector_store import (
     DistanceStrategy,
     QueryParameters,
@@ -32,6 +33,7 @@ __all__ = [
     "SpannerDocumentSaver",
     "SpannerLoader",
     "SpannerGraphStore",
+    "SpannerGraphQAChain",
     "TableColumn",
     "SecondaryIndex",
     "QueryParameters",
