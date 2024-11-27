@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.4.1...v0.5.0) (2024-11-25)
+
+
+### Features
+
+* **graph:** Add Spanner Graph support to LangChain GraphStore interface ([#104](https://github.com/googleapis/langchain-google-spanner-python/issues/104)) ([98c2f8f](https://github.com/googleapis/langchain-google-spanner-python/commit/98c2f8f395e71813f6b1d59e2dedb8c053fee7eb))
+
 ## [0.4.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.4.0...v0.4.1) (2024-10-04)
 
 
