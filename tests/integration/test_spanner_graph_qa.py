@@ -28,7 +28,6 @@ from langchain_google_spanner.graph_store import SpannerGraphStore
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
 database_id = os.environ["GOOGLE_DATABASE"]
-graph_name = os.environ["GRAPH_NAME"]
 
 
 def get_llm():
@@ -47,6 +46,8 @@ def get_evaluator():
 
 
 def get_spanner_graph():
+    suffix = random_string(num_char=5, exclude_whitespaces=True)
+    graph_name = "test_graph{}".format(suffix)
     graph = SpannerGraphStore(
         instance_id=instance_id,
         database_id=database_id,
@@ -133,6 +134,7 @@ class TestSpannerGraphQAChain:
         load_data(graph)
         yield graph
         # teardown
+        print(graph.get_schema)
         graph.cleanup()
 
     @pytest.fixture
