@@ -32,7 +32,7 @@ instance_id = os.environ["INSTANCE_ID"]
 database_id = os.environ["GOOGLE_DATABASE"]
 
 
-def random_string(num_char=5, exclude_whitespaces=False):
+def random_string(num_char=3, exclude_whitespaces=False):
     return "".join(
         random.choice(
             string.ascii_letters + ("" if exclude_whitespaces else string.whitespace)
@@ -57,7 +57,7 @@ def get_evaluator():
 
 
 def get_spanner_graph():
-    suffix = random_string(num_char=5, exclude_whitespaces=True)
+    suffix = random_string(num_char=3, exclude_whitespaces=True)
     graph_name = "test_graph{}".format(suffix)
     graph = SpannerGraphStore(
         instance_id=instance_id,
@@ -69,12 +69,13 @@ def get_spanner_graph():
 
 
 def load_data(graph: SpannerGraphStore):
+    type_suffix = "_" + random_string(num_char=3, exclude_whitespaces=True)
     graph_documents = [
         GraphDocument(
             nodes=[
                 Node(
                     id="Elias Thorne",
-                    type="Person",
+                    type="Person" + type_suffix,
                     properties={
                         "name": "Elias Thorne",
                         "description": "lived in the desert",
@@ -82,42 +83,54 @@ def load_data(graph: SpannerGraphStore):
                 ),
                 Node(
                     id="Zephyr",
-                    type="Animal",
+                    type="Animal" + type_suffix,
                     properties={"name": "Zephyr", "description": "pet falcon"},
                 ),
                 Node(
                     id="Elara",
-                    type="Person",
+                    type="Person" + type_suffix,
                     properties={
                         "name": "Elara",
                         "description": "resided in the capital city",
                     },
                 ),
-                Node(id="Desert", type="Location", properties={}),
-                Node(id="Capital City", type="Location", properties={}),
+                Node(id="Desert", type="Location" + type_suffix, properties={}),
+                Node(id="Capital City", type="Location" + type_suffix, properties={}),
             ],
             relationships=[
                 Relationship(
-                    source=Node(id="Elias Thorne", type="Person", properties={}),
-                    target=Node(id="Desert", type="Location", properties={}),
+                    source=Node(
+                        id="Elias Thorne", type="Person" + type_suffix, properties={}
+                    ),
+                    target=Node(
+                        id="Desert", type="Location" + type_suffix, properties={}
+                    ),
                     type="LivesIn",
                     properties={},
                 ),
                 Relationship(
-                    source=Node(id="Elias Thorne", type="Person", properties={}),
-                    target=Node(id="Zephyr", type="Animal", properties={}),
+                    source=Node(
+                        id="Elias Thorne", type="Person" + type_suffix, properties={}
+                    ),
+                    target=Node(
+                        id="Zephyr", type="Animal" + type_suffix, properties={}
+                    ),
                     type="Owns",
                     properties={},
                 ),
                 Relationship(
-                    source=Node(id="Elara", type="Person", properties={}),
-                    target=Node(id="Capital City", type="Location", properties={}),
+                    source=Node(id="Elara", type="Person" + type_suffix, properties={}),
+                    target=Node(
+                        id="Capital City", type="Location" + type_suffix, properties={}
+                    ),
                     type="LivesIn",
                     properties={},
                 ),
                 Relationship(
-                    source=Node(id="Elias Thorne", type="Person", properties={}),
-                    target=Node(id="Elara", type="Person", properties={}),
+                    source=Node(
+                        id="Elias Thorne", type="Person" + type_suffix, properties={}
+                    ),
+                    target=Node(id="Elara", type="Person" + type_suffix, properties={}),
                     type="Sibling",
                     properties={},
                 ),
