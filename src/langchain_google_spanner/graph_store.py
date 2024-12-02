@@ -1025,7 +1025,7 @@ class SpannerGraphStore(GraphStore):
         columns.append(ElementSchema.TARGET_NODE_KEY_COLUMN_NAME)
         return name, columns, rows
 
-    def cleanup(self):
+    def cleanup(self, timeout: int = 60):
         """Removes all data from your Spanner Graph.
 
         USE IT WITH CAUTION!
@@ -1038,18 +1038,21 @@ class SpannerGraphStore(GraphStore):
                 "DROP PROPERTY GRAPH IF EXISTS {}".format(
                     to_identifier(self.schema.graph_name)
                 )
-            ]
+            ],
+            {timeout: 300},
         )
         self.impl.apply_ddls(
             [
                 "DROP TABLE IF EXISTS {}".format(to_identifier(edge.base_table_name))
                 for edge in self.schema.edges.values()
-            ]
+            ],
+            {timeout: 300},
         )
         self.impl.apply_ddls(
             [
                 "DROP TABLE IF EXISTS {}".format(to_identifier(node.base_table_name))
                 for node in self.schema.nodes.values()
-            ]
+            ],
+            {timeout: 300},
         )
         self.schema = SpannerGraphSchema(self.schema.graph_name)
