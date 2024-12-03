@@ -834,7 +834,7 @@ class SpannerImpl(object):
 
         op = self.database.update_ddl(ddl_statements=ddls)
         print("Waiting for DDL operations to complete...")
-        return op.result(options.get("timeout", 60))
+        return op.result(options.get("timeout", 300))
 
     def insert_or_update(
         self, table: str, columns: List[str], values: List[List[Any]]
