@@ -84,6 +84,8 @@ def fix_gql_syntax(query: str) -> str:
     query = re.sub(r"-\[(.*?):(\w+)\*(\d+)\]->", r"-[\1:\2]->{\3}", query)
     query = re.sub(r"<-\[(.*?):(\w+)\*(\d+)\.\.(\d+)\]-", r"<-[\1:\2]-{\3,\4}", query)
     query = re.sub(r"<-\[(.*?):(\w+)\*(\d+)\]-", r"<-[\1:\2]-{\3}", query)
+    query = re.sub(r"-\[(.*?):(\w+)\*(\d+)\.\.(\d+)\]-", r"-[\1:\2]-{\3,\4}", query)
+    query = re.sub(r"-\[(.*?):(\w+)\*(\d+)\]-", r"-[\1:\2]-{\3}", query)
     return query
 
 
@@ -291,6 +293,37 @@ class SpannerGraphQAChain(Chain):
         question: str,
         gql_query: str,
     ) -> tuple[str, List[Any]]:
+        retries = 0
+        while retries <= self.max_gql_fix_retries:
+            try:
+                intermediate_steps.append({"generated_query": gql_query})
+                return gql_query, self.execute_query(_run_manager, gql_query)
+            except Exception as e:
+                err_msg = str(e)
+                self.log_invalid_query(_run_manager, gql_query, err_msg)
+                intermediate_steps.pop()
+                intermediate_steps.append({"query_failed_" + str(retries): gql_query})
+                fix_chain_result = self.gql_fix_chain.invoke(
+                    {
+                        "question": question,
+                        "err_msg": err_msg,
+                        "generated_gql": gql_query,
+                        "schema": self.graph.get_schema,
+                    }
+                )
+                gql_query = extract_gql(fix_chain_result)
+            finally:
+                retries += 1
+
+        raise ValueError("The generated gql query is invalid")
+
+    def execute_with_retry_bkp(
+        self,
+        _run_manager: CallbackManagerForChainRun,
+        intermediate_steps: List,
+        question: str,
+        gql_query: str,
+    ) -> tuple[str, List[Any]]:
         try:
             intermediate_steps.append({"generated_query": gql_query})
             return gql_query, self.execute_query(_run_manager, gql_query)
@@ -322,6 +355,7 @@ class SpannerGraphQAChain(Chain):
                     gql_query = new_gql_query
                     err_msg = str(e)
                     self.log_invalid_query(_run_manager, gql_query, err_msg)
+
         raise ValueError("The generated gql query is invalid")
 
     def log_invalid_query(

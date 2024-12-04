@@ -32,10 +32,7 @@ database_id = os.environ["GOOGLE_DATABASE"]
 
 
 def random_string(num_char=3):
-    return "".join(
-        random.choice(string.ascii_letters)
-        for _ in range(num_char)
-    )
+    return "".join(random.choice(string.ascii_letters) for _ in range(num_char))
 
 
 def get_llm():
