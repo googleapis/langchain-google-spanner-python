@@ -104,20 +104,6 @@ def extract_gql(text: str) -> str:
     return fix_gql_syntax(query)
 
 
-def extract_verified_gql(json_response: str) -> str:
-    """Extract GQL query from a LLM response.
-
-    Args:
-        response: Response to extract GQL query from.
-
-    Returns:
-        GQL query extracted from the text.
-    """
-
-    json_response["verified_gql"] = fix_gql_syntax(str(json_response["verified_gql"]))
-    return json_response["verified_gql"]
-
-
 class SpannerGraphQAChain(Chain):
     """Chain for question-answering against a Spanner Graph database by
         generating GQL statements from natural language questions.
@@ -200,12 +186,12 @@ class SpannerGraphQAChain(Chain):
     @classmethod
     def from_llm(
         cls,
-        llm: BaseLanguageModel = None,
+        llm: Optional[BaseLanguageModel] = None,
         *,
-        qa_prompt: BasePromptTemplate = None,
-        gql_prompt: BasePromptTemplate = None,
-        gql_verify_prompt: BasePromptTemplate = None,
-        gql_fix_prompt: BasePromptTemplate = None,
+        qa_prompt: Optional[BasePromptTemplate] = None,
+        gql_prompt: Optional[BasePromptTemplate] = None,
+        gql_verify_prompt: Optional[BasePromptTemplate] = None,
+        gql_fix_prompt: Optional[BasePromptTemplate] = None,
         qa_llm_kwargs: Optional[Dict[str, Any]] = None,
         gql_llm_kwargs: Optional[Dict[str, Any]] = None,
         gql_verify_llm_kwargs: Optional[Dict[str, Any]] = None,
@@ -355,7 +341,7 @@ class SpannerGraphQAChain(Chain):
                     "graph_schema": self.graph.get_schema,
                 }
             )
-            verified_gql = extract_verified_gql(verify_response)
+            verified_gql = fix_gql_syntax(verify_response["verified_gql"])
             intermediate_steps.append({"verified_gql": verified_gql})
         else:
             verified_gql = generated_gql
