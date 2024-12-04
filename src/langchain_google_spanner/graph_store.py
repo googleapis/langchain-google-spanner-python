@@ -28,6 +28,7 @@ from requests.structures import CaseInsensitiveDict
 from .type_utils import TypeUtility
 
 MUTATION_BATCH_SIZE = 1000
+DEFAULT_DDL_TIMEOUT = 300
 
 
 class NodeWrapper(object):
@@ -834,7 +835,7 @@ class SpannerImpl(object):
 
         op = self.database.update_ddl(ddl_statements=ddls)
         print("Waiting for DDL operations to complete...")
-        return op.result(options.get("timeout", 300))
+        return op.result(options.get("timeout", DEFAULT_DDL_TIMEOUT))
 
     def insert_or_update(
         self, table: str, columns: List[str], values: List[List[Any]]
@@ -1025,7 +1026,7 @@ class SpannerGraphStore(GraphStore):
         columns.append(ElementSchema.TARGET_NODE_KEY_COLUMN_NAME)
         return name, columns, rows
 
-    def cleanup(self, timeout: int = 60):
+    def cleanup(self):
         """Removes all data from your Spanner Graph.
 
         USE IT WITH CAUTION!
@@ -1038,21 +1039,18 @@ class SpannerGraphStore(GraphStore):
                 "DROP PROPERTY GRAPH IF EXISTS {}".format(
                     to_identifier(self.schema.graph_name)
                 )
-            ],
-            {timeout: 300},
+            ]
         )
         self.impl.apply_ddls(
             [
                 "DROP TABLE IF EXISTS {}".format(to_identifier(edge.base_table_name))
                 for edge in self.schema.edges.values()
-            ],
-            {timeout: 300},
+            ]
         )
         self.impl.apply_ddls(
             [
                 "DROP TABLE IF EXISTS {}".format(to_identifier(node.base_table_name))
                 for node in self.schema.nodes.values()
-            ],
-            {timeout: 300},
+            ]
         )
         self.schema = SpannerGraphSchema(self.schema.graph_name)

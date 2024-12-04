@@ -50,7 +50,7 @@ that it is `[e:Transfers]->{{1, 3}}` and NOT `[e:Transfers*1..3]->`
 """
 
 DEFAULT_GQL_TEMPLATE_PART0 = """
-Create an ISO GQL query for the question using the schema.
+Create an Spanner Graph GQL query for the question using the schema.
 {gql_examples}
 """
 
@@ -148,7 +148,7 @@ The verified gql fixes the path quantification syntax:
 """
 
 DEFAULT_GQL_VERIFY_TEMPLATE_PART0 = """
-Given a natual language question, ISO GQL graph query and a graph schema,
+Given a natual language question, Spanner Graph GQL graph query and a graph schema,
 validate the query.
 
 {verify_examples}
@@ -177,9 +177,9 @@ DEFAULT_GQL_VERIFY_TEMPLATE = (
 )
 
 DEFAULT_GQL_FIX_TEMPLATE_PART0 = """
-We generated a ISO GQL query to answer a natural language question.
+We generated a Spanner Graph GQL query to answer a natural language question.
 Question: {question}
-However the generated ISO GQL query is not valid.  ```
+However the generated Spanner Graph GQL query is not valid.  ```
 Input gql: {generated_gql}
 ```
 The error obtained when executing the query is
@@ -233,7 +233,7 @@ If the provided information is empty, say that you don't know the answer.
 You are given the following information:
 - `Question`: the natural language question from the user
 - `Graph Schema`: contains the schema of the graph database
-- `Graph Query`: A ISO GQL query equivalent of the question from the user used to extract context from the graph database
+- `Graph Query`: A Spanner Graph GQL query equivalent of the question from the user used to extract context from the graph database
 - `Context`: The response from the graph database as context
 Information:
 Question: {question}

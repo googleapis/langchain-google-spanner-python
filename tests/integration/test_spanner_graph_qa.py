@@ -31,11 +31,9 @@ instance_id = os.environ["INSTANCE_ID"]
 database_id = os.environ["GOOGLE_DATABASE"]
 
 
-def random_string(num_char=3, exclude_whitespaces=False):
+def random_string(num_char=3):
     return "".join(
-        random.choice(
-            string.ascii_letters + ("" if exclude_whitespaces else string.whitespace)
-        )
+        random.choice(string.ascii_letters)
         for _ in range(num_char)
     )
 
@@ -56,7 +54,7 @@ def get_evaluator():
 
 
 def get_spanner_graph():
-    suffix = random_string(num_char=3, exclude_whitespaces=True)
+    suffix = random_string(num_char=3)
     graph_name = "test_graph{}".format(suffix)
     graph = SpannerGraphStore(
         instance_id=instance_id,
@@ -68,7 +66,7 @@ def get_spanner_graph():
 
 
 def load_data(graph: SpannerGraphStore):
-    type_suffix = "_" + random_string(num_char=3, exclude_whitespaces=True)
+    type_suffix = "_" + random_string(num_char=3)
     graph_documents = [
         GraphDocument(
             nodes=[
