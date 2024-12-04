@@ -26,7 +26,8 @@ from langchain_core.prompts.prompt import PromptTemplate
 from langchain_core.runnables import RunnableSequence
 from pydantic.v1 import BaseModel, Field
 
-from .graph_store import SpannerGraphStore
+from langchain_google_spanner.graph_store import SpannerGraphStore
+
 from .prompts import (
     DEFAULT_GQL_FIX_TEMPLATE,
     DEFAULT_GQL_TEMPLATE,

@@ -151,15 +151,14 @@ See the full `Spanner Graph Store`_ tutorial.
 
 .. _`Spanner Graph Store`: https://github.com/googleapis/langchain-google-spanner-python/blob/main/docs/graph_store.ipynb
 
-Spanner Graph QA Usage
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Spanner Graph QA Chain Usage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Use ``SpannerGraphQAChain`` for question answering over a graph stored in Spanner Graph.
 
 .. code:: python
 
-    from langchain_google_spanner import SpannerGraphQAChain
-    from langchain_google_spanner import SpannerGraphStore
+    from langchain_google_spanner import SpannerGraphStore, SpannerGraphQAChain
     from langchain_google_vertexai import ChatVertexAI
 
 
