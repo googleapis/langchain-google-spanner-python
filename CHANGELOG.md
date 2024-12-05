@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.5.0...v0.6.0) (2024-12-05)
+
+
+### Features
+
+* Add Spanner Graph QA Chain ([#111](https://github.com/googleapis/langchain-google-spanner-python/issues/111)) ([e22abde](https://github.com/googleapis/langchain-google-spanner-python/commit/e22abde9a94625ee69f8975fc0950cedd11bc542))
+
 ## [0.5.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.4.1...v0.5.0) (2024-11-25)
 
 
