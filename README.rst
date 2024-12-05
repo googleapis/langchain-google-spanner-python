@@ -151,6 +151,34 @@ See the full `Spanner Graph Store`_ tutorial.
 
 .. _`Spanner Graph Store`: https://github.com/googleapis/langchain-google-spanner-python/blob/main/docs/graph_store.ipynb
 
+Spanner Graph QA Chain Usage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``SpannerGraphQAChain`` for question answering over a graph stored in Spanner Graph.
+
+.. code:: python
+
+    from langchain_google_spanner import SpannerGraphStore, SpannerGraphQAChain
+    from langchain_google_vertexai import ChatVertexAI
+
+
+    graph = SpannerGraphStore(
+        instance_id="my-instance",
+        database_id="my-database",
+        graph_name="my_graph",
+    )
+    llm = ChatVertexAI()
+    chain = SpannerGraphQAChain.from_llm(
+        llm,
+        graph=graph,
+        allow_dangerous_requests=True
+    )
+    chain.invoke("query=Where does Sarah's sibling live?")
+
+See the full `Spanner Graph QA Chain`_ tutorial.
+
+.. _`Spanner Graph QA Chain`: https://github.com/googleapis/langchain-google-spanner-python/blob/main/docs/graph_qa_chain.ipynb
+
 
 Contributions
 ~~~~~~~~~~~~~

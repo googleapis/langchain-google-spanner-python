@@ -28,6 +28,7 @@ from requests.structures import CaseInsensitiveDict
 from .type_utils import TypeUtility
 
 MUTATION_BATCH_SIZE = 1000
+DEFAULT_DDL_TIMEOUT = 300
 
 
 class NodeWrapper(object):
@@ -834,7 +835,7 @@ class SpannerImpl(object):
 
         op = self.database.update_ddl(ddl_statements=ddls)
         print("Waiting for DDL operations to complete...")
-        return op.result(options.get("timeout", 60))
+        return op.result(options.get("timeout", DEFAULT_DDL_TIMEOUT))
 
     def insert_or_update(
         self, table: str, columns: List[str], values: List[List[Any]]

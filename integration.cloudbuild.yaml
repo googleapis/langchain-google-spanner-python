@@ -33,7 +33,7 @@ steps:
       - "GOOGLE_DATABASE=${_GOOGLE_DATABASE}"
       - "PG_DATABASE=${_PG_DATABASE}"
 
-timeout: "4800s"
+timeout: "7200s"
 substitutions:
   _INSTANCE_ID: test-instance
   _GOOGLE_DATABASE: test-google-db
