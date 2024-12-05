@@ -73,6 +73,16 @@ INTERMEDIATE_STEPS_KEY = "intermediate_steps"
 
 def fix_gql_syntax(query: str) -> str:
     """Fixes the syntax of a GQL query.
+    Example 1:
+        Input:
+            MATCH (p:paper {id: 0})-[c:cites*8]->(p2:paper)
+        Output:
+            MATCH (p:paper {id: 0})-[c:cites]->{8}(p2:paper)
+    Example 2:
+        Input:
+            MATCH (p:paper {id: 0})-[c:cites*1..8]->(p2:paper)
+        Output:
+            MATCH (p:paper {id: 0})-[c:cites]->{1:8}(p2:paper)
 
     Args:
         query: The input GQL query.
@@ -352,6 +362,8 @@ class SpannerGraphQAChain(Chain):
             (final_gql, context) = self.execute_with_retry(
                 _run_manager, intermediate_steps, question, verified_gql
             )
+            if not final_gql:
+                raise ValueError("No GQL was generated.")
             _run_manager.on_text("Full Context:", end="\n", verbose=self.verbose)
             _run_manager.on_text(
                 str(context), color="green", end="\n", verbose=self.verbose
