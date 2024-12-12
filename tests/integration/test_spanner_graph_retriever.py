@@ -31,7 +31,7 @@ from langchain_google_spanner.graph_store import SpannerGraphStore
 
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
-database_id = os.environ["DATABASE_ID"]
+database_id = os.environ["GOOGLE_DATABASE"]
 
 
 def random_string(num_char=3):
