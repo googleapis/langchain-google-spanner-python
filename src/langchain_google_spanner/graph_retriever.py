@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import json
-from typing import Any, List
+from typing import Any, List, Optional
 
 from langchain.schema.retriever import BaseRetriever
 from langchain_community.graphs.graph_document import GraphDocument
@@ -29,6 +29,7 @@ from langchain_core.load import dumps
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import FewShotPromptTemplate
 from langchain_core.prompts.prompt import PromptTemplate
+from langchain_core.runnables import RunnableSequence
 from langchain_core.vectorstores import InMemoryVectorStore
 from pydantic import Field
 
@@ -44,9 +45,9 @@ GQL_GENERATION_PROMPT = PromptTemplate(
 )
 
 
-def graph_doc_to_doc(graph_doc: GraphDocument) -> Document:
-    """Converts a GraphDocument to a Document."""
-    content = dumps(graph_doc, pretty=True)
+def convert_to_doc(data: dict[str, Any]) -> Document:
+    """Converts data to a Document."""
+    content = dumps(data, pretty=True)
     return Document(page_content=content, metadata={})
 
 
@@ -83,9 +84,18 @@ class SpannerGraphGQLRetriever(BaseRetriever):
     """
 
     graph_store: SpannerGraphStore = Field(exclude=True)
-    llm: BaseLanguageModel = None
+    gql_chain: RunnableSequence
     k: int = 10
     """Number of top results to return"""
+
+    @classmethod
+    def from_params(
+        cls, llm: Optional[BaseLanguageModel] = None, **kwargs: Any
+    ) -> "SpannerGraphGQLRetriever":
+        if llm is None:
+            raise ValueError("`llm` cannot be none")
+        gql_chain = GQL_GENERATION_PROMPT | llm | StrOutputParser()
+        return cls(gql_chain=gql_chain, **kwargs)
 
     def _get_relevant_documents(
         self, question: str, *, run_manager: CallbackManagerForRetrieverRun
@@ -94,12 +104,9 @@ class SpannerGraphGQLRetriever(BaseRetriever):
         and return the results as Documents.
         """
 
-        _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
-        # Initialize the chain
-        gql_chain = GQL_GENERATION_PROMPT | self.llm | StrOutputParser()
         # 1. Generate gql query from natural language query using LLM
         gql_query = extract_gql(
-            gql_chain.invoke(
+            self.gql_chain.invoke(
                 {
                     "question": question,
                     "schema": self.graph_store.get_schema,
@@ -110,14 +117,14 @@ class SpannerGraphGQLRetriever(BaseRetriever):
 
         # 2. Execute the gql query against spanner graph
         try:
-            graph_documents = self.graph_store.query(gql_query)[: self.k]
+            responses = self.graph_store.query(gql_query)[: self.k]
         except Exception as e:
             raise ValueError(str(e))
 
         # 3. Transform the results into a list of Documents
         documents = []
-        for graph_document in graph_documents:
-            documents.append(graph_doc_to_doc(graph_document))
+        for response in responses:
+            documents.append(convert_to_doc(response))
         return documents
 
 
@@ -129,24 +136,34 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
     """
 
     graph_store: SpannerGraphStore = Field(exclude=True)
-    llm: BaseLanguageModel = None
     k: int = 10
     """Number of top results to return"""
-    selector: SemanticSimilarityExampleSelector = None
+    llm: Optional[BaseLanguageModel] = None
+    selector: Optional[SemanticSimilarityExampleSelector] = None
 
     @classmethod
-    def from_llm(
-        cls, embedding_service: Embeddings = None, **kwargs: Any
+    def from_params(
+        cls,
+        llm: Optional[BaseLanguageModel] = None,
+        embedding_service: Optional[Embeddings] = None,
+        **kwargs: Any,
     ) -> "SpannerGraphSemanticGQLRetriever":
+        if llm is None:
+            raise ValueError("`llm` cannot be none")
+        if embedding_service is None:
+            raise ValueError("`embedding_service` cannot be none")
         selector = SemanticSimilarityExampleSelector.from_examples(
-            [], embedding_service, InMemoryVectorStore(embedding_service), k=2
+            [], embedding_service, InMemoryVectorStore, k=2
         )
         return cls(
+            llm=llm,
             selector=selector,
             **kwargs,
         )
 
     def add_example(self, question: str, gql: str):
+        if self.selector is None:
+            raise ValueError("`selector` cannot be None")
         self.selector.add_example(
             {"input": question, "query": duplicate_braces_in_string(gql)}
         )
@@ -158,6 +175,11 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
         by a semantic similarity model, execute it, and return the results as
         Documents.
         """
+
+        if self.llm is None:
+            raise ValueError("`llm` cannot be None")
+        if self.selector is None:
+            raise ValueError("`selector` cannot be None")
 
         # Define the prompt template
         prompt = FewShotPromptTemplate(
@@ -186,14 +208,14 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
 
         # 2. Execute the gql query against spanner graph
         try:
-            graph_documents = self.graph_store.query(gql_query)[: self.k]
+            responses = self.graph_store.query(gql_query)[: self.k]
         except Exception as e:
             raise ValueError(str(e))
 
         # 3. Transform the results into a list of Documents
         documents = []
-        for graph_document in graph_documents:
-            documents.append(graph_doc_to_doc(graph_document))
+        for response in responses:
+            documents.append(convert_to_doc(response))
         return documents
 
 
@@ -204,21 +226,35 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
     """
 
     graph_store: SpannerGraphStore = Field(exclude=True)
-    embedding_service: Embeddings
+    embedding_service: Optional[Embeddings] = None
     label_expr: str = "%"
+    """A label expression for the nodes to search"""
     return_properties_list: List[str] = []
+    """The list of properties to return"""
     embeddings_column: str = "embedding"
+    """The name of the column that stores embedding"""
     query_parameters: QueryParameters = QueryParameters()
     k: int = 10
     """Number of top results to return"""
-    graph_expansion_query: str = None
+    graph_expansion_query: str = ""
     """GQL query to expand the returned context"""
+
+    @classmethod
+    def from_params(
+        cls, embedding_service: Optional[Embeddings] = None, **kwargs: Any
+    ) -> "SpannerGraphNodeVectorRetriever":
+        if embedding_service is None:
+            raise ValueError("`embedding_service` cannot be None")
+        return cls(
+            embedding_service=embedding_service,
+            **kwargs,
+        )
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         print(self.return_properties_list)
         print(self.graph_expansion_query)
-        if not self.return_properties_list and self.graph_expansion_query is None:
+        if not self.return_properties_list and not self.graph_expansion_query:
             raise ValueError(
                 "Either `return_properties` or `graph_expansion_query` must be provided."
             )
@@ -228,6 +264,9 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
     ) -> List[Document]:
         """Translate the natural language query to GQL, execute it,
         and return the results as Documents."""
+
+        if self.embedding_service is None:
+            raise ValueError("`embedding_service` cannot be None")
 
         schema = self.graph_store.get_schema
         graph_name = get_graph_name_from_schema(schema)
@@ -286,5 +325,5 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
         # 3. Transform the results into a list of Documents
         documents = []
         for graph_document in graph_documents:
-            documents.append(graph_doc_to_doc(graph_document))
+            documents.append(convert_to_doc(graph_document))
         return documents

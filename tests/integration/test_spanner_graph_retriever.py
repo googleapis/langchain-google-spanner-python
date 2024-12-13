@@ -167,7 +167,7 @@ class TestRetriever:
 
     def test_spanner_graph_gql_retriever(self, setup_db_load_data):
         graph, suffix = setup_db_load_data
-        retriever = SpannerGraphGQLRetriever(
+        retriever = SpannerGraphGQLRetriever.from_params(
             graph_store=graph,
             llm=get_llm(),
         )
@@ -179,7 +179,7 @@ class TestRetriever:
     def test_spanner_graph_semantic_gql_retriever(self, setup_db_load_data):
         graph, suffix = setup_db_load_data
         suffix = "_" + suffix
-        retriever = SpannerGraphSemanticGQLRetriever.from_llm(
+        retriever = SpannerGraphSemanticGQLRetriever.from_params(
             graph_store=graph,
             llm=get_llm(),
             embedding_service=get_embedding(),
@@ -213,7 +213,7 @@ class TestRetriever:
         with pytest.raises(ValueError):
             graph, suffix = setup_db_load_data
             suffix = "_" + suffix
-            SpannerGraphNodeVectorRetriever(
+            SpannerGraphNodeVectorRetriever.from_params(
                 graph_store=graph,
                 embedding_service=get_embedding(),
                 label_expr="Person{}".format(suffix),
@@ -224,7 +224,7 @@ class TestRetriever:
     def test_spanner_graph_vector_node_retriever(self, setup_db_load_data):
         graph, suffix = setup_db_load_data
         suffix = "_" + suffix
-        retriever = SpannerGraphNodeVectorRetriever(
+        retriever = SpannerGraphNodeVectorRetriever.from_params(
             graph_store=graph,
             embedding_service=get_embedding(),
             label_expr="Person{}".format(suffix),
