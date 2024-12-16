@@ -94,7 +94,9 @@ class SpannerGraphGQLRetriever(BaseRetriever):
     ) -> "SpannerGraphGQLRetriever":
         if llm is None:
             raise ValueError("`llm` cannot be none")
-        gql_chain = GQL_GENERATION_PROMPT | llm | StrOutputParser()
+        gql_chain: RunnableSequence = RunnableSequence(
+            GQL_GENERATION_PROMPT | llm | StrOutputParser()
+        )
         return cls(gql_chain=gql_chain, **kwargs)
 
     def _get_relevant_documents(
