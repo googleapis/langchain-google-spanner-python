@@ -234,10 +234,12 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
     embeddings_column: str = "embedding"
     """The name of the column that stores embedding"""
     query_parameters: QueryParameters = QueryParameters()
-    k: int = 10
-    """Number of top results to return"""
+    top_k: int = 3
+    """Number of vector similarity matches to return"""
     graph_expansion_query: str = ""
     """GQL query to expand the returned context"""
+    k: int = 10
+    """Number of graph results to return"""
 
     @classmethod
     def from_params(
@@ -278,9 +280,10 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
         VECTOR_QUERY = """
             GRAPH {graph_name}
             MATCH ({node_var}:{label_expr})
+            WHERE {node_var}.{embeddings_column} IS NOT NULL
             ORDER BY {distance_fn}({node_var}.{embeddings_column},
                     ARRAY[{query_embeddings}])
-            LIMIT {k}
+            LIMIT {top_k}
         """
         gql_query = VECTOR_QUERY.format(
             graph_name=graph_name,
@@ -289,7 +292,7 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
             embeddings_column=self.embeddings_column,
             distance_fn=distance_fn,
             query_embeddings=",".join(map(str, query_embeddings)),
-            k=self.k,
+            top_k=self.top_k,
         )
 
         if self.return_properties_list:
