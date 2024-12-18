@@ -14,10 +14,12 @@
 
 from __future__ import annotations
 
+import base64
 import datetime
 from typing import Any
 
 from google.cloud.spanner_v1 import param_types
+from google.cloud.spanner_v1 import JsonObject
 
 
 class TypeUtility(object):
@@ -59,6 +61,8 @@ class TypeUtility(object):
             return "FLOAT64"
         if t.code == param_types.TypeCode.TIMESTAMP:
             return "TIMESTAMP"
+        if t.code == param_types.TypeCode.JSON:
+            return "JSON"
         raise ValueError("Unsupported type: %s" % t)
 
     @staticmethod
@@ -85,6 +89,8 @@ class TypeUtility(object):
             return param_types.FLOAT32
         if s == "TIMESTAMP":
             return param_types.TIMESTAMP
+        if s == "JSON":
+            return param_types.JSON
         if s.startswith("ARRAY<") and s.endswith(">"):
             return param_types.Array(
                 TypeUtility.schema_str_to_spanner_type(s[len("ARRAY<") : -len(">")])
@@ -113,8 +119,40 @@ class TypeUtility(object):
             return param_types.FLOAT64
         if isinstance(v, datetime.datetime):
             return param_types.TIMESTAMP
+        if isinstance(v, JsonObject):
+            return param_types.JSON
         if isinstance(v, list):
             if len(v) == 0:
                 raise ValueError("Unknown element type of empty array")
             return param_types.Array(TypeUtility.value_to_param_type(v[0]))
+        raise ValueError("Unsupported type of param: {}".format(v))
+
+    @staticmethod
+    def value_for_json(v: Any) -> Any:
+        """Returns a value for JSON.
+
+        Parameters:
+        - v: a python value.
+        """
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            return v
+        if isinstance(v, float):
+            return str(v)
+        if isinstance(v, bytes):
+            return base64.b64encode(v).decode("utf-8")
+        if isinstance(v, datetime.datetime):
+            return str(v)
+        if isinstance(v, JsonObject):
+            return v
+        if isinstance(v, list):
+            return [TypeUtility.value_for_json(e) for e in v]
+        if isinstance(v, dict):
+            return {
+                TypeUtility.value_for_json(k): TypeUtility.value_for_json(v)
+                for k, v in v.items()
+            }
         raise ValueError("Unsupported type of param: {}".format(v))
