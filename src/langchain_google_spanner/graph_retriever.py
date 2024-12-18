@@ -47,7 +47,7 @@ GQL_GENERATION_PROMPT = PromptTemplate(
 
 def convert_to_doc(data: dict[str, Any]) -> Document:
     """Converts data to a Document."""
-    content = dumps(data, pretty=True)
+    content = dumps(data)
     return Document(page_content=content, metadata={})
 
 
@@ -75,6 +75,31 @@ def duplicate_braces_in_string(text):
     text = text.replace("{", "{{")
     text = text.replace("}", "}}")
     return text
+
+
+def clean_element(element, embedding_column):
+    """Removes specified keys and embedding from properties in graph element.
+
+    Args:
+      element: A dictionary representing element
+
+    Returns:
+      A cleaned dictionary with the specified keys removed.
+    """
+
+    keys_to_remove = [
+        "source_node_identifier",
+        "destination_node_identifier",
+        "identifier",
+    ]
+    for key in keys_to_remove:
+        if key in element:
+            del element[key]
+
+    if "properties" in element and embedding_column in element["properties"]:
+        del element["properties"][embedding_column]
+
+    return element
 
 
 class SpannerGraphGQLRetriever(BaseRetriever):
@@ -206,7 +231,7 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
                 }
             )
         )
-        print(gql_query)  # TODO(amullick): REMOVE
+        print(gql_query)
 
         # 2. Execute the gql query against spanner graph
         try:
@@ -240,6 +265,8 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
     """Number of vector similarity matches to return"""
     graph_expansion_query: str = ""
     """GQL query to expand the returned context"""
+    expand_by_hops: int = -1
+    """Number of hops to traverse to expand graph results"""
     k: int = 10
     """Number of graph results to return"""
 
@@ -256,11 +283,19 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        print(self.return_properties_list)
-        print(self.graph_expansion_query)
-        if not self.return_properties_list and not self.graph_expansion_query:
+        if self.embedding_service is None:
+            raise ValueError("`embedding_service` cannot be None")
+
+        sum = 0
+        if self.return_properties_list:
+            sum += 1
+        if self.graph_expansion_query:
+            sum += 1
+        if self.expand_by_hops != -1:
+            sum += 1
+        if sum != 1:
             raise ValueError(
-                "Either `return_properties` or `graph_expansion_query` must be provided."
+                "One and only one of `return_properties` or `graph_expansion_query` or `expand_by_hops` must be provided."
             )
 
     def _get_relevant_documents(
@@ -268,9 +303,6 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
     ) -> List[Document]:
         """Translate the natural language query to GQL, execute it,
         and return the results as Documents."""
-
-        if self.embedding_service is None:
-            raise ValueError("`embedding_service` cannot be None")
 
         schema = self.graph_store.get_schema
         graph_name = get_graph_name_from_schema(schema)
@@ -297,7 +329,16 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
             top_k=self.top_k,
         )
 
-        if self.return_properties_list:
+        if self.expand_by_hops >= 0:
+            gql_query += """
+          RETURN node
+          NEXT
+          MATCH p = (node) -[]-{{0,{}}} ()
+          RETURN SAFE_TO_JSON(p) as path
+          """.format(
+                self.expand_by_hops
+            )
+        elif self.return_properties_list:
             return_properties = ",".join(
                 map(lambda x: node_variable + "." + x, self.return_properties_list)
             )
@@ -323,12 +364,23 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
 
         # 2. Execute the gql query against spanner graph
         try:
-            graph_documents = self.graph_store.query(gql_query)[: self.k]
+            responses = self.graph_store.query(gql_query)[: self.k]
         except Exception as e:
             raise ValueError(str(e))
 
         # 3. Transform the results into a list of Documents
         documents = []
-        for graph_document in graph_documents:
-            documents.append(convert_to_doc(graph_document))
+        if self.expand_by_hops >= 0:
+            for response in responses:
+                elements = json.loads((response["path"]).serialize())
+                for element in elements:
+                    clean_element(element, self.embeddings_column)
+                response["path"] = elements
+                content = dumps(response["path"])
+                documents.append(Document(page_content=content, metadata={}))
+
+        else:
+            for response in responses:
+                documents.append(convert_to_doc(response))
+
         return documents

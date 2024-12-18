@@ -157,7 +157,7 @@ def load_data(graph: SpannerGraphStore, suffix: str):
 
 class TestRetriever:
 
-    @pytest.fixture
+    @pytest.fixture(scope="module")
     def setup_db_load_data(self):
         graph, suffix = get_spanner_graph()
         load_data(graph, suffix)
@@ -206,7 +206,7 @@ class TestRetriever:
         )
         response = retriever.invoke("Where does Elias Thorne's sibling live?")
         assert response == [
-            Document(metadata={}, page_content='{\n  "location_id": "Capital City"\n}')
+            Document(metadata={}, page_content='{"location_id": "Capital City"}')
         ]
 
     def test_spanner_graph_vector_node_retriever_error(self, setup_db_load_data):
@@ -230,8 +230,27 @@ class TestRetriever:
             label_expr="Person{}".format(suffix),
             return_properties_list=["name"],
             embeddings_column="desc_embedding",
+            top_k=1,
             k=1,
         )
         response = retriever.invoke("Who lives in desert?")
         assert len(response) == 1
+        assert "Elias Thorne" in response[0].page_content
+
+    def test_spanner_graph_vector_node_retriever_2(self, setup_db_load_data):
+        graph, suffix = setup_db_load_data
+        suffix = "_" + suffix
+        retriever = SpannerGraphNodeVectorRetriever.from_params(
+            graph_store=graph,
+            embedding_service=get_embedding(),
+            label_expr="Person{}".format(suffix),
+            expand_by_hops=1,
+            embeddings_column="desc_embedding",
+            top_k=1,
+            k=10,
+        )
+        response = retriever.invoke(
+            "What do you know about the person who lives in desert?"
+        )
+        assert len(response) == 4
         assert "Elias Thorne" in response[0].page_content
