@@ -307,6 +307,9 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
         schema = self.graph_store.get_schema
         graph_name = get_graph_name_from_schema(schema)
         node_variable = "node"
+
+        if self.embedding_service is None:
+            raise ValueError("`embedding_service` cannot be None")
         query_embeddings = self.embedding_service.embed_query(question)
 
         distance_fn = get_distance_function(self.query_parameters.distance_strategy)
