@@ -242,8 +242,8 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
 
 class SpannerGraphNodeVectorRetriever(BaseRetriever):
     """Retriever that does a vector search on nodes in a SpannerGraphStore.
-    If a graph expansion query is provided, it will be executed after the
-    initial vector search to expand the returned context.
+    If expand_by_hops is provided , the nodes (and edges) at a distance upto
+    the expand_by hops will also be returned.
     """
 
     graph_store: SpannerGraphStore = Field(exclude=True)
@@ -257,8 +257,6 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
     query_parameters: QueryParameters = QueryParameters()
     top_k: int = 3
     """Number of vector similarity matches to return"""
-    graph_expansion_query: str = ""
-    """GQL query to expand the returned context"""
     expand_by_hops: int = -1
     """Number of hops to traverse to expand graph results"""
     k: int = 10
@@ -283,13 +281,11 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
         sum = 0
         if self.return_properties_list:
             sum += 1
-        if self.graph_expansion_query:
-            sum += 1
         if self.expand_by_hops != -1:
             sum += 1
         if sum != 1:
             raise ValueError(
-                "One and only one of `return_properties` or `graph_expansion_query` or `expand_by_hops` must be provided."
+                "One and only one of `return_properties` or `expand_by_hops` must be provided."
             )
 
     def _get_relevant_documents(
@@ -344,17 +340,9 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
       """.format(
                 return_properties
             )
-        elif self.graph_expansion_query is not None:
-            gql_query += """
-      RETURN node
-      NEXT
-      {}
-      """.format(
-                self.graph_expansion_query
-            )
         else:
             raise ValueError(
-                "Either `return_properties` or `graph_expansion_query` must be provided."
+                "Either `return_properties` or `expand_by_hops` must be provided."
             )
 
         print(gql_query)
