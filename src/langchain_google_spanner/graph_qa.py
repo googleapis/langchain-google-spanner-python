@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, List, Optional
 
 from langchain.chains.base import Chain
@@ -28,6 +27,7 @@ from pydantic.v1 import BaseModel, Field
 
 from langchain_google_spanner.graph_store import SpannerGraphStore
 
+from .graph_utils import extract_gql, fix_gql_syntax
 from .prompts import (
     DEFAULT_GQL_FIX_TEMPLATE,
     DEFAULT_GQL_TEMPLATE,
@@ -69,50 +69,6 @@ SPANNERGRAPH_QA_PROMPT = PromptTemplate(
 )
 
 INTERMEDIATE_STEPS_KEY = "intermediate_steps"
-
-
-def fix_gql_syntax(query: str) -> str:
-    """Fixes the syntax of a GQL query.
-    Example 1:
-        Input:
-            MATCH (p:paper {id: 0})-[c:cites*8]->(p2:paper)
-        Output:
-            MATCH (p:paper {id: 0})-[c:cites]->{8}(p2:paper)
-    Example 2:
-        Input:
-            MATCH (p:paper {id: 0})-[c:cites*1..8]->(p2:paper)
-        Output:
-            MATCH (p:paper {id: 0})-[c:cites]->{1:8}(p2:paper)
-
-    Args:
-        query: The input GQL query.
-
-    Returns:
-        Possibly modified GQL query.
-    """
-
-    query = re.sub(r"-\[(.*?):(\w+)\*(\d+)\.\.(\d+)\]->", r"-[\1:\2]->{\3,\4}", query)
-    query = re.sub(r"-\[(.*?):(\w+)\*(\d+)\]->", r"-[\1:\2]->{\3}", query)
-    query = re.sub(r"<-\[(.*?):(\w+)\*(\d+)\.\.(\d+)\]-", r"<-[\1:\2]-{\3,\4}", query)
-    query = re.sub(r"<-\[(.*?):(\w+)\*(\d+)\]-", r"<-[\1:\2]-{\3}", query)
-    query = re.sub(r"-\[(.*?):(\w+)\*(\d+)\.\.(\d+)\]-", r"-[\1:\2]-{\3,\4}", query)
-    query = re.sub(r"-\[(.*?):(\w+)\*(\d+)\]-", r"-[\1:\2]-{\3}", query)
-    return query
-
-
-def extract_gql(text: str) -> str:
-    """Extract GQL query from a text.
-
-    Args:
-        text: Text to extract GQL query from.
-
-    Returns:
-        GQL query extracted from the text.
-    """
-    pattern = r"```(.*?)```"
-    matches = re.findall(pattern, text, re.DOTALL)
-    query = matches[0] if matches else text
-    return fix_gql_syntax(query)
 
 
 class SpannerGraphQAChain(Chain):
