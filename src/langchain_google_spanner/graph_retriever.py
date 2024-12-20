@@ -143,10 +143,7 @@ class SpannerGraphGQLRetriever(BaseRetriever):
         print(gql_query)
 
         # 2. Execute the gql query against spanner graph
-        try:
-            responses = self.graph_store.query(gql_query)[: self.k]
-        except Exception as e:
-            raise ValueError(str(e))
+        responses = self.graph_store.query(gql_query)[: self.k]
 
         # 3. Transform the results into a list of Documents
         documents = []
@@ -234,10 +231,7 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
         print(gql_query)
 
         # 2. Execute the gql query against spanner graph
-        try:
-            responses = self.graph_store.query(gql_query)[: self.k]
-        except Exception as e:
-            raise ValueError(str(e))
+        responses = self.graph_store.query(gql_query)[: self.k]
 
         # 3. Transform the results into a list of Documents
         documents = []
@@ -336,7 +330,7 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
             gql_query += """
           RETURN node
           NEXT
-          MATCH p = (node) -[]-{{0,{}}} ()
+          MATCH p = TRAIL (node) -[]-{{0,{}}} ()
           RETURN SAFE_TO_JSON(p) as path
           """.format(
                 self.expand_by_hops
@@ -366,10 +360,7 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
         print(gql_query)
 
         # 2. Execute the gql query against spanner graph
-        try:
-            responses = self.graph_store.query(gql_query)[: self.k]
-        except Exception as e:
-            raise ValueError(str(e))
+        responses = self.graph_store.query(gql_query)[: self.k]
 
         # 3. Transform the results into a list of Documents
         documents = []
