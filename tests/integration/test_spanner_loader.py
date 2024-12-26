@@ -15,9 +15,9 @@
 import os
 import uuid
 
-import pytest
-from google.cloud.spanner import Client  # type: ignore
+from google.cloud.spanner import Client
 from langchain_core.documents import Document
+import pytest
 
 from langchain_google_spanner.loader import Column, SpannerDocumentSaver, SpannerLoader
 

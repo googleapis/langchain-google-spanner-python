@@ -14,9 +14,9 @@
 
 from __future__ import annotations
 
+from abc import abstractmethod
 import re
 import string
-from abc import abstractmethod
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
 from google.cloud import spanner
@@ -211,9 +211,9 @@ class ElementSchema(object):
                 for k, v in n.properties.items()
             }
         )
-        node.types[ElementSchema.NODE_KEY_COLUMN_NAME] = (
-            TypeUtility.value_to_param_type(nodes[0].id)
-        )
+        node.types[
+            ElementSchema.NODE_KEY_COLUMN_NAME
+        ] = TypeUtility.value_to_param_type(nodes[0].id)
         return node
 
     @staticmethod
@@ -264,12 +264,12 @@ class ElementSchema(object):
                 for k, v in e.properties.items()
             }
         )
-        edge.types[ElementSchema.NODE_KEY_COLUMN_NAME] = (
-            TypeUtility.value_to_param_type(edges[0].source.id)
-        )
-        edge.types[ElementSchema.TARGET_NODE_KEY_COLUMN_NAME] = (
-            TypeUtility.value_to_param_type(edges[0].target.id)
-        )
+        edge.types[
+            ElementSchema.NODE_KEY_COLUMN_NAME
+        ] = TypeUtility.value_to_param_type(edges[0].source.id)
+        edge.types[
+            ElementSchema.TARGET_NODE_KEY_COLUMN_NAME
+        ] = TypeUtility.value_to_param_type(edges[0].target.id)
 
         edge.source = NodeReference(
             edges[0].source.type,

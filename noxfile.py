@@ -18,8 +18,8 @@ from __future__ import absolute_import
 
 import os
 import pathlib
-import shutil
 from pathlib import Path
+import shutil
 
 import nox
 
