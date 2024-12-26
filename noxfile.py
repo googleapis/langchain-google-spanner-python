@@ -18,7 +18,6 @@ from __future__ import absolute_import
 
 import os
 import pathlib
-from pathlib import Path
 import shutil
 
 import nox
@@ -33,6 +32,7 @@ nox.options.sessions = [
     "docfx",
     "docs",
     "format",
+    "integration",
     "lint",
     "unit",
 ]
@@ -41,7 +41,7 @@ nox.options.sessions = [
 nox.options.error_on_missing_interpreters = True
 
 
-@nox.session(python=DEFAULT_PYTHON_VERSION)
+@nox.session(python="3.10")
 def docs(session):
     """Build the docs for this library."""
 
@@ -76,7 +76,7 @@ def docs(session):
     )
 
 
-@nox.session(python=DEFAULT_PYTHON_VERSION)
+@nox.session(python="3.10")
 def docfx(session):
     """Build the docfx yaml files for this library."""
 

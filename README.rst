@@ -73,7 +73,7 @@ Use a vector store to store embedded data and perform vector search.
 
 .. code-block:: python
 
-    from langchain_google_spanner import SpannerVectorstore
+    from langchain_google_sapnner import SpannerVectorstore
     from langchain.embeddings import VertexAIEmbeddings
 
     embeddings_service = VertexAIEmbeddings(model_name="textembedding-gecko@003")
@@ -253,3 +253,9 @@ Disclaimer
 
 This is not an officially supported Google product.
 
+
+Limitations
+----------
+
+* Approximate Nearest Neighbors (ANN) strategies are only supported for the GoogleSQL dialect
+* ANN's `ALTER VECTOR INDEX` is not yet supported by [Google Cloud Spanner](https://cloud.google.com/spanner/docs/find-approximate-nearest-neighbors#limitations)
