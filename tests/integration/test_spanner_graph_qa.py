@@ -16,12 +16,12 @@ import os
 import random
 import string
 
-import pytest
 from google.cloud import spanner
 from langchain.evaluation import load_evaluator
 from langchain_community.graphs.graph_document import GraphDocument, Node, Relationship
 from langchain_core.documents import Document
 from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
+import pytest
 
 from langchain_google_spanner.graph_qa import SpannerGraphQAChain
 from langchain_google_spanner.graph_store import SpannerGraphStore
@@ -145,7 +145,6 @@ def load_data(graph: SpannerGraphStore):
 
 
 class TestSpannerGraphQAChain:
-
     @pytest.fixture(scope="module")
     def setup_db_load_data(self):
         graph = get_spanner_graph()
