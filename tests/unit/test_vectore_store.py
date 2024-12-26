@@ -18,6 +18,8 @@ from langchain_google_spanner.vector_store import (
     DistanceStrategy,
     GoogleSqlSemnatics,
     PGSqlSemnatics,
+    SecondaryIndex,
+    SpannerVectorStore,
 )
 
 
@@ -69,3 +71,37 @@ class TestPGSqlSemnatics(unittest.TestCase):
         for strategy in strategies:
             with self.assertRaises(Exception):
                 sem.getDistanceFunction(strategy)
+
+
+class TestSpannerVectorStore_KNN(unittest.TestCase):
+    def test_generate_create_table_sql(self):
+        got = SpannerVectorStore._generate_create_table_sql(
+            "users",
+            "id",
+            "essays",
+            "science_scores",
+            [],
+            "id",
+        )
+        want = "CREATE TABLE users (\n  id STRING(36),\n  essays STRING(MAX),\n  science_scores ARRAY<FLOAT64>\n) PRIMARY KEY(id)"
+        assert got == want
+
+    def test_generate_secondary_indices_ddl_ANN(self):
+        got = SpannerVectorStore._generate_secondary_indices_ddl_ANN(
+            "Documents",
+            secondary_indexes=[
+                SecondaryIndex(
+                    index_name="DocEmbeddingIndex",
+                    columns=["DocEmbedding"],
+                    num_branches=1000,
+                    tree_depth=3,
+                    index_type=DistanceStrategy.COSINE,
+                    num_leaves=100000,
+                )
+            ],
+        )
+        want = [
+            "CREATE VECTOR INDEX DocEmbeddingIndex\n\tON Documents(DocEmbedding)\n\tOPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
+        ]
+
+        assert got == want
