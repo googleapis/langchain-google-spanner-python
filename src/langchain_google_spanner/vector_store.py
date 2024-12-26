@@ -14,13 +14,12 @@
 
 from __future__ import annotations
 
-import datetime
-import logging
 from abc import ABC, abstractmethod
+import datetime
 from enum import Enum
+import logging
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
 
-import numpy as np
 from google.cloud import spanner  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from google.cloud.spanner_v1 import JsonObject, param_types
@@ -28,6 +27,7 @@ from langchain_community.vectorstores.utils import maximal_marginal_relevance
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
+import numpy as np
 
 from .version import __version__
 
@@ -104,6 +104,10 @@ class DistanceStrategy(Enum):
 
     COSINE = 1
     EUCLIDEIAN = 2
+    DOT_PRODUCT = 3
+    APPROX_DOT_PRODUCT = 4
+    APPROX_COSINE = 5
+    APPROX_EUCLIDEAN = 6
 
 
 class DialectSemantics(ABC):
@@ -139,16 +143,23 @@ class DialectSemantics(ABC):
         )
 
 
+_GOOGLE_DISTANCE_ALGO_NAMES = {
+    DistanceStrategy.APPROX_COSINE: "APPROX_COSINE_DISTANCE",
+    DistanceStrategy.APPROX_DOT_PRODUCT: "APPROX_DOT_PRODUCT",
+    DistanceStrategy.APPROX_EUCLIDEAN: "APPROX_EUCLIDEAN_DISTANCE",
+    DistanceStrategy.COSINE: "COSINE_DISTANCE",
+    DistanceStrategy.DOT_PRODUCT: "DOT_PRODUCT",
+    DistanceStrategy.EUCLIDEIAN: "EUCLIDEAN_DISTANCE",
+}
+
+
 class GoogleSqlSemnatics(DialectSemantics):
     """
     Implementation of dialect semantics for Google SQL.
     """
 
     def getDistanceFunction(self, distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
-        if distance_strategy == DistanceStrategy.COSINE:
-            return "COSINE_DISTANCE"
-
-        return "EUCLIDEAN_DISTANCE"
+        return _GOOGLE_DISTANCE_ALGO_NAMES.get(distance_strategy, "EUCLIDEAN")
 
     def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
         where_clause_condition = " AND ".join(
@@ -163,15 +174,25 @@ class GoogleSqlSemnatics(DialectSemantics):
         return dict(zip(columns, values))
 
 
+_PG_DISTANCE_ALGO_NAMES = {
+    DistanceStrategy.COSINE: "spanner.cosine_distance",
+    DistanceStrategy.DOT_PRODUCT: "spanner.dot_product",
+    DistanceStrategy.EUCLIDEIAN: "spanner.euclidean_distance",
+}
+
+
 class PGSqlSemnatics(DialectSemantics):
     """
     Implementation of dialect semantics for PostgreSQL.
     """
 
     def getDistanceFunction(self, distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
-        if distance_strategy == DistanceStrategy.COSINE:
-            return "spanner.cosine_distance"
-        return "spanner.euclidean_distance"
+        name = _PG_DISTANCE_ALGO_NAMES.get(distance_strategy, None)
+        if name is None:
+            raise Exception(
+                "Unsupported PostgreSQL distance strategy: {}".format(distance_strategy)
+            )
+        return name
 
     def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
         where_clause_condition = " AND ".join(
@@ -210,6 +231,7 @@ class QueryParameters:
         """
 
         EXACT_NEAREST_NEIGHBOR = 1
+        APPROXIMATE_NEAREST_NEIGHBOR = 2
 
     def __init__(
         self,

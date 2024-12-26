@@ -206,3 +206,8 @@ Disclaimer
 
 This is not an officially supported Google product.
 
+
+Limitations
+----------
+
+* Approximate Nearest Neighbors (ANN) strategies are only support for the GoogleSQL dialect

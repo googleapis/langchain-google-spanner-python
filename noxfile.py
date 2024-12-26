@@ -173,6 +173,7 @@ def format(session):
     )
 
 
+@nox.session(python=DEFAULT_PYTHON_VERSION)
 def unit(session):
     install_unittest_dependencies(session)
     session.run(
@@ -192,3 +193,13 @@ UNIT_TEST_DEPENDENCIES: List[str] = []
 def install_unittest_dependencies(session, *constraints):
     standard_deps = UNIT_TEST_STANDARD_DEPENDENCIES + UNIT_TEST_DEPENDENCIES
     session.install(*standard_deps, *constraints)
+    session.run(
+        "pip",
+        "install",
+        "--no-compile",  # To ensure no byte recompliation which is usually super slow
+        "-q",
+        "--disable-pip-version-check",  # Avoid the slow version check
+        ".",
+        "-r",
+        "requirements.txt",
+    )
