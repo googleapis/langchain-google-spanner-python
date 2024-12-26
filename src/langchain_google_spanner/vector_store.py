@@ -14,13 +14,12 @@
 
 from __future__ import annotations
 
-import datetime
-import logging
 from abc import ABC, abstractmethod
+import datetime
 from enum import Enum
+import logging
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
 
-import numpy as np
 from google.cloud import spanner  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from google.cloud.spanner_v1 import JsonObject, param_types
@@ -28,6 +27,7 @@ from langchain_community.vectorstores.utils import maximal_marginal_relevance
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
+import numpy as np
 
 from .version import __version__
 

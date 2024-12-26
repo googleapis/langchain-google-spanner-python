@@ -16,10 +16,10 @@
 import os
 import uuid
 
-import pytest  # noqa
 from google.cloud.spanner import Client  # type: ignore
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.human import HumanMessage
+import pytest  # noqa
 
 from langchain_google_spanner import SpannerChatMessageHistory
 

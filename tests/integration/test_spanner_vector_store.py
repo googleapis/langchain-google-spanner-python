@@ -16,10 +16,10 @@ import datetime
 import os
 import uuid
 
-import pytest
 from google.cloud.spanner import Client  # type: ignore
 from langchain_community.document_loaders import HNLoader
 from langchain_community.embeddings import FakeEmbeddings
+import pytest
 
 from langchain_google_spanner.vector_store import (  # type: ignore
     DistanceStrategy,
@@ -301,7 +301,7 @@ class TestSpannerVectorStoreGoogleSQL:
 
         deleted = db.delete(documents=[docs[0], docs[1]])
 
-        assert deleted == True
+        assert deleted
 
     def test_spanner_vector_search_data1(self, setup_database):
         loader, embeddings = setup_database
@@ -483,7 +483,7 @@ class TestSpannerVectorStorePGSQL:
 
         deleted = db.delete(documents=[docs[0], docs[1]])
 
-        assert deleted == True
+        assert deleted
 
     def test_spanner_vector_search_data1(self, setup_database):
         loader, embeddings = setup_database

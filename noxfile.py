@@ -18,25 +18,31 @@ from __future__ import absolute_import
 
 import os
 import pathlib
-import shutil
 from pathlib import Path
-from typing import Optional
+import shutil
+from typing import List, Optional
 
 import nox
 
 DEFAULT_PYTHON_VERSION = "3.10"
 CURRENT_DIRECTORY = pathlib.Path(__file__).parent.absolute()
+LINT_PATHS = ["src", "tests", "noxfile.py"]
+
 
 nox.options.sessions = [
-    "docs",
+    "blacken",
     "docfx",
+    "docs",
+    "format",
+    "lint",
+    "unit",
 ]
 
 # Error if a python version is missing
 nox.options.error_on_missing_interpreters = True
 
 
-@nox.session(python="3.10")
+@nox.session(python=DEFAULT_PYTHON_VERSION)
 def docs(session):
     """Build the docs for this library."""
 
@@ -71,7 +77,7 @@ def docs(session):
     )
 
 
-@nox.session(python="3.10")
+@nox.session(python=DEFAULT_PYTHON_VERSION)
 def docfx(session):
     """Build the docfx yaml files for this library."""
 
@@ -114,4 +120,101 @@ def docfx(session):
         os.path.join("docs", "_build", "doctrees", ""),
         os.path.join("docs", ""),
         os.path.join("docs", "_build", "html", ""),
+    )
+
+
+@nox.session(python=DEFAULT_PYTHON_VERSION)
+def lint(session):
+    """Run linters.
+
+    Returns a failure if the linters find linting errors or
+    sufficiently serious code quality issues.
+    """
+    session.install(".[lint]")
+    session.run(
+        "black",
+        "--check",
+        *LINT_PATHS,
+    )
+    session.run("flake8", "src", "tests")
+
+
+@nox.session(python=DEFAULT_PYTHON_VERSION)
+def lint_setup_py(session):
+    """Verify that setup.py is valid (including an RST check)."""
+    session.install("docutils", "pygments")
+    session.run("python", "setup.py", "check", "--restructuredtext", "--strict")
+
+
+@nox.session(python=DEFAULT_PYTHON_VERSION)
+def blacken(session):
+    session.install(".[lint]")
+    session.run(
+        "black",
+        *LINT_PATHS,
+    )
+
+
+@nox.session(python=DEFAULT_PYTHON_VERSION)
+def format(session):
+    session.install(".[lint]")
+    # Sort imports in strict alphabetical order.
+    session.run(
+        "isort",
+        "--fss",
+        *LINT_PATHS,
+    )
+    session.run(
+        "black",
+        *LINT_PATHS,
+    )
+
+
+@nox.session(python=DEFAULT_PYTHON_VERSION)
+def unit(session):
+    install_unittest_dependencies(session)
+    session.run(
+        "py.test",
+        "--quiet",
+        os.path.join("tests", "unit"),
+        *session.posargs,
+    )
+
+
+def install_unittest_dependencies(session, *constraints):
+    session.install(".[test]")
+    session.run(
+        "pip",
+        "install",
+        "--no-compile",  # To ensure no byte recompliation which is usually super slow
+        "-q",
+        "--disable-pip-version-check",  # Avoid the slow version check
+        ".",
+        "-r",
+        "requirements.txt",
+    )
+
+
+@nox.session(python=DEFAULT_PYTHON_VERSION)
+def integration(session):
+    install_integrationtest_dependencies(session)
+    session.run(
+        "py.test",
+        "--quiet",
+        os.path.join("tests", "integration"),
+        *session.posargs,
+    )
+
+
+def install_integrationtest_dependencies(session):
+    session.install(".[test]")
+    session.run(
+        "pip",
+        "install",
+        "--no-compile",  # To ensure no byte recompliation which is usually super slow
+        "-q",
+        "--disable-pip-version-check",  # Avoid the slow version check
+        ".",
+        "-r",
+        "requirements.txt",
     )
