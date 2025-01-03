@@ -17,8 +17,8 @@ import datetime
 import os
 import random
 import string
-import pytest
 
+import pytest
 from google.cloud.spanner import Client  # type: ignore
 from google.cloud.spanner_v1 import JsonObject
 from langchain_community.graphs.graph_document import GraphDocument, Node, Relationship

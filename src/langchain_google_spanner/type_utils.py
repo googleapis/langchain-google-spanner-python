@@ -18,8 +18,7 @@ import base64
 import datetime
 from typing import Any
 
-from google.cloud.spanner_v1 import param_types
-from google.cloud.spanner_v1 import JsonObject
+from google.cloud.spanner_v1 import JsonObject, param_types
 
 
 class TypeUtility(object):

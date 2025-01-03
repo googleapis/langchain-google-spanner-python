@@ -14,15 +14,14 @@
 
 from __future__ import annotations
 
+import json
 import re
 import string
 from abc import abstractmethod
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
-import json
 
 from google.cloud import spanner
-from google.cloud.spanner_v1 import param_types
-from google.cloud.spanner_v1 import JsonObject
+from google.cloud.spanner_v1 import JsonObject, param_types
 from langchain_community.graphs.graph_document import GraphDocument, Node, Relationship
 from langchain_community.graphs.graph_store import GraphStore
 from requests.structures import CaseInsensitiveDict
