@@ -963,13 +963,47 @@ class SpannerVectorStore(VectorStore):
             List[Document]: List of documents most similar to the query.
         """
 
-        results, column_order_map = self._get_rows_by_similarity_search(
+        results, column_order_map = self._get_rows_by_similarity_search_knn(
             embedding, k, pre_filter
         )
         documents = self._get_documents_from_query_results(
             list(results), column_order_map
         )
         return documents
+
+    def search_by_ANN(
+        self,
+        column_name: str,
+        table_name: str,
+        index_name: str,
+        embedding: List[float],
+        embedding_column_name: str,
+        num_leaves: int,
+        strategy: DistanceStrategy = DistanceStrategy.COSINE,
+        limit: int = None,
+        is_embedding_nullable: bool = False,
+        where_condition: str = None,
+    ) -> List[Any]:
+        sql = SpannerVectorStore._query_ANN(
+            column_name,
+            table_name,
+            index_name,
+            embedding,
+            embedding_column_name,
+            num_leaves,
+            strategy,
+            limit,
+            is_embedding_nullable,
+            where_condition,
+        )
+        staleness = self._query_parameters.staleness
+        with self._database.snapshot(
+            **staleness if staleness is not None else {}
+        ) as snapshot:
+            results = snapshot.execute_sql(
+                sql=sql_query,
+            )
+            return list(results)
 
     @staticmethod
     def _query_ANN(
@@ -1005,7 +1039,7 @@ class SpannerVectorStore(VectorStore):
             + "}\n"
             + f" ORDER BY {ann_strategy_name}(\n"
             + f"  ARRAY<FLOAT32>{embedding}, {embedding_column_name}, options => JSON '"
-            + "{\"num_leaves_to_search\": %s})\n"%(num_leaves)
+            + '{"num_leaves_to_search": %s})\n' % (num_leaves)
         )
 
         if where_condition:
@@ -1016,7 +1050,7 @@ class SpannerVectorStore(VectorStore):
 
         return sql
 
-    def _get_rows_by_similarity_search(
+    def _get_rows_by_similarity_search_knn(
         self,
         embedding: List[float],
         k: int,
@@ -1193,7 +1227,7 @@ class SpannerVectorStore(VectorStore):
             List of Documents and similarity scores selected by maximal marginal
                 relevance and score for each.
         """
-        results, column_order_map = self._get_rows_by_similarity_search(
+        results, column_order_map = self._get_rows_by_similarity_search_knn(
             embedding, fetch_k, pre_filter
         )
 

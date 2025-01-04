@@ -16,6 +16,7 @@ from collections import namedtuple
 import unittest
 
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
+
 from langchain_google_spanner.vector_store import (
     AlgoKind,
     DistanceStrategy,
@@ -206,7 +207,7 @@ class TestSpannerVectorStore_KNN(unittest.TestCase):
         want = (
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + " ORDER BY APPROX_COSINE_DISTANCE(\n"
-            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON '{\"num_leaves_to_search\": 10})\n"
+            + '  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON \'{"num_leaves_to_search": 10})\n'
             + "LIMIT 100"
         )
 
