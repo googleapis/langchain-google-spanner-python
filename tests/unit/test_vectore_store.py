@@ -17,6 +17,7 @@ import unittest
 
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from langchain_google_spanner.vector_store import (
+    AlgoKind,
     DistanceStrategy,
     GoogleSqlSemnatics,
     PGSqlSemnatics,
@@ -31,9 +32,6 @@ class TestGoogleSqlSemnatics(unittest.TestCase):
             (DistanceStrategy.COSINE, "COSINE_DISTANCE"),
             (DistanceStrategy.DOT_PRODUCT, "DOT_PRODUCT"),
             (DistanceStrategy.EUCLIDEIAN, "EUCLIDEAN_DISTANCE"),
-            (DistanceStrategy.APPROX_COSINE, "APPROX_COSINE_DISTANCE"),
-            (DistanceStrategy.APPROX_DOT_PRODUCT, "APPROX_DOT_PRODUCT"),
-            (DistanceStrategy.APPROX_EUCLIDEAN, "APPROX_EUCLIDEAN_DISTANCE"),
         ]
 
         sem = GoogleSqlSemnatics()
@@ -65,9 +63,8 @@ class TestPGSqlSemnatics(unittest.TestCase):
 
     def test_distance_function_raises_exception_if_unknown(self):
         strategies = [
-            DistanceStrategy.APPROX_COSINE,
-            DistanceStrategy.APPROX_DOT_PRODUCT,
-            DistanceStrategy.APPROX_EUCLIDEAN,
+            100,
+            -1,
         ]
 
         for strategy in strategies:
@@ -89,57 +86,67 @@ class TestSpannerVectorStore_KNN(unittest.TestCase):
         assert got == want
 
     def test_generate_secondary_indices_ddl_ANN(self):
-        got = SpannerVectorStore._generate_secondary_indices_ddl_ANN(
-            "Documents",
-            secondary_indexes=[
-                SecondaryIndex(
-                    index_name="DocEmbeddingIndex",
-                    columns=["DocEmbedding"],
-                    num_branches=1000,
-                    tree_depth=3,
-                    index_type=DistanceStrategy.COSINE,
-                    num_leaves=100000,
-                )
-            ],
-        )
-
-        want = [
-            "CREATE VECTOR INDEX DocEmbeddingIndex\n"
-            + "  ON Documents(DocEmbedding)\n"
-            + "  OPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
+        strategies = [
+            DistanceStrategy.COSINE,
+            DistanceStrategy.DOT_PRODUCT,
+            DistanceStrategy.EUCLIDEIAN,
         ]
 
-        assert canonicalize(got) == canonicalize(want)
+        for distance_strategy in strategies:
+            got = SpannerVectorStore._generate_secondary_indices_ddl_ANN(
+                "Documents",
+                secondary_indexes=[
+                    SecondaryIndex(
+                        index_name="DocEmbeddingIndex",
+                        columns=["DocEmbedding"],
+                        num_branches=1000,
+                        tree_depth=3,
+                        index_type=distance_strategy,
+                        num_leaves=100000,
+                    )
+                ],
+            )
+
+            want = [
+                "CREATE VECTOR INDEX DocEmbeddingIndex\n"
+                + "  ON Documents(DocEmbedding)\n"
+                + f"  OPTIONS(distance_type='{distance_strategy}', tree_depth=3, num_branches=1000, num_leaves=100000)"
+            ]
+
+            assert canonicalize(got) == canonicalize(want)
 
     def test_generate_secondary_indices_ddl_ANN_raises_exception_for_non_GoogleSQL_dialect(
         self,
     ):
-        got = SpannerVectorStore._generate_secondary_indices_ddl_ANN(
-            "Documents",
-            secondary_indexes=[
-                SecondaryIndex(
-                    index_name="DocEmbeddingIndex",
-                    columns=["DocEmbedding"],
-                    num_branches=1000,
-                    tree_depth=3,
-                    index_type=DistanceStrategy.COSINE,
-                    num_leaves=100000,
-                )
-            ],
-        )
-
-        want = [
-            "CREATE VECTOR INDEX DocEmbeddingIndex\n"
-            + "  ON Documents(DocEmbedding)\n"
-            + "  OPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
+        strategies = [
+            DistanceStrategy.COSINE,
+            DistanceStrategy.DOT_PRODUCT,
+            DistanceStrategy.EUCLIDEIAN,
         ]
 
-        assert canonicalize(got) == canonicalize(want)
+        for strategy in strategies:
+            with self.assertRaises(Exception):
+                SpannerVectorStore._generate_secondary_indices_ddl_ANN(
+                    "Documents",
+                    dialect=DatabaseDialect.POSTGRESQL,
+                    secondary_indexes=[
+                        SecondaryIndex(
+                            index_name="DocEmbeddingIndex",
+                            columns=["DocEmbedding"],
+                            num_branches=1000,
+                            tree_depth=3,
+                            index_type=strategy,
+                            num_leaves=100000,
+                        )
+                    ],
+                )
 
     def test_generate_secondary_indices_ddl_KNN_GoogleDialect(self):
+        embed_column = namedtuple("Column", ["name"])
+        embed_column.name = "text"
         got = SpannerVectorStore._generate_secondary_indices_ddl_KNN(
             "Documents",
-            embedding_column="custom_embedding_id1",
+            embedding_column=embed_column,
             dialect=DatabaseDialect.GOOGLE_STANDARD_SQL,
             secondary_indexes=[
                 SecondaryIndex(
@@ -154,9 +161,7 @@ class TestSpannerVectorStore_KNN(unittest.TestCase):
         )
 
         want = [
-            "CREATE INDEX DocEmbeddingIndex\n"
-            + "  ON Documents(DocEmbedding)\n"
-            + "  OPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
+            "CREATE INDEX DocEmbeddingIndex ON Documents(DocEmbedding)  STORING (text)"
         ]
 
         assert canonicalize(got) == canonicalize(want)
@@ -181,12 +186,33 @@ class TestSpannerVectorStore_KNN(unittest.TestCase):
         )
 
         want = [
-            "CREATE INDEX DocEmbeddingIndex\n"
-            + "  ON Documents(DocEmbedding)\n"
-            + "  OPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
+            "CREATE INDEX DocEmbeddingIndex ON Documents(DocEmbedding)  INCLUDE (text)"
         ]
 
         assert canonicalize(got) == canonicalize(want)
+
+    def test_query_ANN(self):
+        got = SpannerVectorStore._query_ANN(
+            "DocId",
+            "Documents",
+            "DocEmbeddingIndex",
+            [1.0, 2.0, 3.0],
+            "DocEmbedding",
+            10,
+            DistanceStrategy.COSINE,
+            limit=100,
+        )
+
+        want = (
+            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            + " ORDER BY APPROX_COSINE_DISTANCE(\n"
+            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON '{\"num_leaves_to_search\": 10})\n"
+            + "LIMIT 100"
+        )
+
+        print("got", got)
+        print("want", want)
+        assert got == want
 
 
 def trimSpaces(x: str) -> str:

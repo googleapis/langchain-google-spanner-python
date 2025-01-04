@@ -109,9 +109,6 @@ class DistanceStrategy(Enum):
     COSINE = 1
     EUCLIDEIAN = 2
     DOT_PRODUCT = 3
-    APPROX_DOT_PRODUCT = 4
-    APPROX_COSINE = 5
-    APPROX_EUCLIDEAN = 6
 
     def __str__(self):
         return DISTANCE_STRATEGY_STRING[self]
@@ -158,12 +155,15 @@ class DialectSemantics(ABC):
 
 
 _GOOGLE_DISTANCE_ALGO_NAMES = {
-    DistanceStrategy.APPROX_COSINE: "APPROX_COSINE_DISTANCE",
-    DistanceStrategy.APPROX_DOT_PRODUCT: "APPROX_DOT_PRODUCT",
-    DistanceStrategy.APPROX_EUCLIDEAN: "APPROX_EUCLIDEAN_DISTANCE",
     DistanceStrategy.COSINE: "COSINE_DISTANCE",
     DistanceStrategy.DOT_PRODUCT: "DOT_PRODUCT",
     DistanceStrategy.EUCLIDEIAN: "EUCLIDEAN_DISTANCE",
+}
+
+distance_strategy_to_ANN_function = {
+    DistanceStrategy.COSINE: "APPROX_COSINE_DISTANCE",
+    DistanceStrategy.DOT_PRODUCT: "APPROX_DOT_PRODUCT",
+    DistanceStrategy.EUCLIDEIAN: "APPROX_EUCLIDEAN_DISTANCE",
 }
 
 _GOOGLE_ALGO_INDEX_NAME = {
@@ -401,6 +401,7 @@ class SpannerVectorStore(VectorStore):
         primary_key,
         secondary_indexes: Optional[List[SecondaryIndex]] = None,
         kind: Optional[AlgoKind] = AlgoKind.KNN,
+        limit=None,
     ):
         """
         Generate SQL for creating the vector store table.
@@ -969,6 +970,51 @@ class SpannerVectorStore(VectorStore):
             list(results), column_order_map
         )
         return documents
+
+    @staticmethod
+    def _query_ANN(
+        column_name: str,
+        table_name: str,
+        index_name: str,
+        embedding: List[float],
+        embedding_column_name: str,
+        num_leaves: int,
+        strategy: DistanceStrategy = DistanceStrategy.COSINE,
+        limit: int = None,
+        is_embedding_nullable: bool = False,
+        where_condition: str = None,
+    ):
+        """
+        Sample query:
+            SELECT DocId
+            FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}
+            ORDER BY APPROX_EUCLIDEAN_DISTANCE(
+              ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding,
+              options => JSON '{"num_leaves_to_search": 10}')
+            LIMIT 100
+        """
+
+        ann_strategy_name = distance_strategy_to_ANN_function.get(strategy, None)
+        if not ann_strategy_name:
+            raise Exception(f"{strategy} is not supported for ANN")
+
+        sql = (
+            f"SELECT {column_name} FROM {table_name}"
+            + "@{FORCE_INDEX="
+            + f"{index_name}"
+            + "}\n"
+            + f" ORDER BY {ann_strategy_name}(\n"
+            + f"  ARRAY<FLOAT32>{embedding}, {embedding_column_name}, options => JSON '"
+            + "{\"num_leaves_to_search\": %s})\n"%(num_leaves)
+        )
+
+        if where_condition:
+            sql += " WHERE " + where_condition + "\n"
+
+        if limit:
+            sql += f"LIMIT {limit}"
+
+        return sql
 
     def _get_rows_by_similarity_search(
         self,
