@@ -333,7 +333,10 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
             )
         elif self.return_properties_list:
             return_properties = ",".join(
-                map(lambda x: node_variable + "." + x, self.return_properties_list)
+                map(
+                    lambda x: node_variable + ".`" + x + "`",
+                    self.return_properties_list,
+                )
             )
             gql_query += """
       RETURN {}
