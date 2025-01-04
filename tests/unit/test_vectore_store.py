@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License
 
+from collections import namedtuple
 import unittest
 
+from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from langchain_google_spanner.vector_store import (
     DistanceStrategy,
     GoogleSqlSemnatics,
@@ -100,8 +102,96 @@ class TestSpannerVectorStore_KNN(unittest.TestCase):
                 )
             ],
         )
+
         want = [
-            "CREATE VECTOR INDEX DocEmbeddingIndex\n\tON Documents(DocEmbedding)\n\tOPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
+            "CREATE VECTOR INDEX DocEmbeddingIndex\n"
+            + "  ON Documents(DocEmbedding)\n"
+            + "  OPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
         ]
 
-        assert got == want
+        assert canonicalize(got) == canonicalize(want)
+
+    def test_generate_secondary_indices_ddl_ANN_raises_exception_for_non_GoogleSQL_dialect(
+        self,
+    ):
+        got = SpannerVectorStore._generate_secondary_indices_ddl_ANN(
+            "Documents",
+            secondary_indexes=[
+                SecondaryIndex(
+                    index_name="DocEmbeddingIndex",
+                    columns=["DocEmbedding"],
+                    num_branches=1000,
+                    tree_depth=3,
+                    index_type=DistanceStrategy.COSINE,
+                    num_leaves=100000,
+                )
+            ],
+        )
+
+        want = [
+            "CREATE VECTOR INDEX DocEmbeddingIndex\n"
+            + "  ON Documents(DocEmbedding)\n"
+            + "  OPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
+        ]
+
+        assert canonicalize(got) == canonicalize(want)
+
+    def test_generate_secondary_indices_ddl_KNN_GoogleDialect(self):
+        got = SpannerVectorStore._generate_secondary_indices_ddl_KNN(
+            "Documents",
+            embedding_column="custom_embedding_id1",
+            dialect=DatabaseDialect.GOOGLE_STANDARD_SQL,
+            secondary_indexes=[
+                SecondaryIndex(
+                    index_name="DocEmbeddingIndex",
+                    columns=["DocEmbedding"],
+                    num_branches=1000,
+                    tree_depth=3,
+                    index_type=DistanceStrategy.COSINE,
+                    num_leaves=100000,
+                )
+            ],
+        )
+
+        want = [
+            "CREATE INDEX DocEmbeddingIndex\n"
+            + "  ON Documents(DocEmbedding)\n"
+            + "  OPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
+        ]
+
+        assert canonicalize(got) == canonicalize(want)
+
+    def test_generate_secondary_indices_ddl_KNN_PostgresDialect(self):
+        embed_column = namedtuple("Column", ["name"])
+        embed_column.name = "text"
+        got = SpannerVectorStore._generate_secondary_indices_ddl_KNN(
+            "Documents",
+            embedding_column=embed_column,
+            dialect=DatabaseDialect.POSTGRESQL,
+            secondary_indexes=[
+                SecondaryIndex(
+                    index_name="DocEmbeddingIndex",
+                    columns=["DocEmbedding"],
+                    num_branches=1000,
+                    tree_depth=3,
+                    index_type=DistanceStrategy.COSINE,
+                    num_leaves=100000,
+                )
+            ],
+        )
+
+        want = [
+            "CREATE INDEX DocEmbeddingIndex\n"
+            + "  ON Documents(DocEmbedding)\n"
+            + "  OPTIONS(distance_type='COSINE', tree_depth=3, num_branches=1000, num_leaves=100000)"
+        ]
+
+        assert canonicalize(got) == canonicalize(want)
+
+
+def trimSpaces(x: str) -> str:
+    return x.lstrip("\n").rstrip("\n").replace("\t", "  ").strip()
+
+
+def canonicalize(s):
+    return list(map(trimSpaces, s))
