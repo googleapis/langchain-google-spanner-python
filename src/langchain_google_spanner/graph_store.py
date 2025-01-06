@@ -169,7 +169,6 @@ class ElementSchema(object):
     TARGET_NODE_KEY_COLUMN_NAME: str = "target_id"
     DYNAMIC_PROPERTY_COLUMN_NAME: str = "properties"
     DYNAMIC_LABEL_COLUMN_NAME: str = "label"
-    UUID_COLUMN_NAME: str = "default_uuid"
 
     name: str
     original_name: str
@@ -310,7 +309,6 @@ class ElementSchema(object):
         for col_name in [
             ElementSchema.NODE_KEY_COLUMN_NAME,
             ElementSchema.TARGET_NODE_KEY_COLUMN_NAME,
-            ElementSchema.UUID_COLUMN_NAME,
         ]:
             if col_name in edge.types:
                 raise ValueError(
@@ -323,7 +321,6 @@ class ElementSchema(object):
         edge.types[ElementSchema.TARGET_NODE_KEY_COLUMN_NAME] = (
             TypeUtility.value_to_param_type(edges[0].target.id)
         )
-        edge.types[ElementSchema.UUID_COLUMN_NAME] = param_types.STRING
 
         edge.properties = CaseInsensitiveDict({prop: prop for prop in edge.types})
 
@@ -332,7 +329,6 @@ class ElementSchema(object):
         edge.key_columns = [
             ElementSchema.NODE_KEY_COLUMN_NAME,
             ElementSchema.TARGET_NODE_KEY_COLUMN_NAME,
-            ElementSchema.UUID_COLUMN_NAME,
         ]
 
         edge.original_name = name
@@ -383,7 +379,6 @@ class ElementSchema(object):
             {
                 ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME: param_types.JSON,
                 ElementSchema.DYNAMIC_LABEL_COLUMN_NAME: param_types.STRING,
-                ElementSchema.UUID_COLUMN_NAME: param_types.STRING,
                 ElementSchema.NODE_KEY_COLUMN_NAME: TypeUtility.value_to_param_type(
                     edges[0].source.id
                 ),
@@ -410,7 +405,6 @@ class ElementSchema(object):
             ElementSchema.NODE_KEY_COLUMN_NAME,
             ElementSchema.TARGET_NODE_KEY_COLUMN_NAME,
             ElementSchema.DYNAMIC_LABEL_COLUMN_NAME,
-            ElementSchema.UUID_COLUMN_NAME,
         ]
 
         edge.original_name = name
@@ -494,7 +488,7 @@ class ElementSchema(object):
         if len(edges) == 0:
             raise ValueError("Empty list of edges")
 
-        columns = [k for k in self.types.keys() if k != ElementSchema.UUID_COLUMN_NAME]
+        columns = [k for k in self.types.keys()]
         rows = []
         for edge in edges:
             properties = edge.properties.copy()
@@ -591,15 +585,10 @@ class ElementSchema(object):
             to_identifier(self.base_table_name),
             ",\n                ".join(
                 (
-                    "{} {} {}".format(
+                    "{} {}".format(
                         to_identifier(n),
                         TypeUtility.spanner_type_to_schema_str(
                             t, include_type_annotations=True
-                        ),
-                        (
-                            "DEFAULT (GENERATE_UUID())"
-                            if n == ElementSchema.UUID_COLUMN_NAME
-                            else ""
                         ),
                     )
                     for n, t in self.types.items()
