@@ -51,55 +51,8 @@ def convert_to_doc(data: dict[str, Any]) -> Document:
     return Document(page_content=content, metadata={})
 
 
-def get_distance_function(distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
-    """Gets the vector distance function."""
-    if distance_strategy == DistanceStrategy.COSINE:
-        return "COSINE_DISTANCE"
-
-    return "EUCLIDEAN_DISTANCE"
-
-
-def get_graph_name_from_schema(schema: str):
-    return json.loads(schema)["Name of graph"]
-
-
-def duplicate_braces_in_string(text):
-    """Replaces single curly braces with double curly braces in a string.
-
-    Args:
-      text: The input string.
-
-    Returns:
-      The modified string with double curly braces.
-    """
-    text = text.replace("{", "{{")
-    text = text.replace("}", "}}")
-    return text
-
-
-def clean_element(element, embedding_column):
-    """Removes specified keys and embedding from properties in graph element.
-
-    Args:
-      element: A dictionary representing element
-
-    Returns:
-      A cleaned dictionary with the specified keys removed.
-    """
-
-    keys_to_remove = [
-        "source_node_identifier",
-        "destination_node_identifier",
-        "identifier",
-    ]
-    for key in keys_to_remove:
-        if key in element:
-            del element[key]
-
-    if "properties" in element and embedding_column in element["properties"]:
-        del element["properties"][embedding_column]
-
-    return element
+def get_graph_name_from_schema(schema: str) -> str:
+    return "`" + json.loads(schema)["Name of graph"] + "`"
 
 
 class SpannerGraphGQLRetriever(BaseRetriever):
@@ -185,11 +138,30 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
             **kwargs,
         )
 
+    @staticmethod
+    def _duplicate_braces_in_string(text: str) -> str:
+        """Replaces single curly braces with double curly braces in a string.
+
+        Args:
+          text: The input string.
+
+        Returns:
+          The modified string with double curly braces.
+        """
+        text = text.replace("{", "{{")
+        text = text.replace("}", "}}")
+        return text
+
     def add_example(self, question: str, gql: str):
         if self.selector is None:
             raise ValueError("`selector` cannot be None")
         self.selector.add_example(
-            {"input": question, "query": duplicate_braces_in_string(gql)}
+            {
+                "input": question,
+                "query": SpannerGraphSemanticGQLRetriever._duplicate_braces_in_string(
+                    gql
+                ),
+            }
         )
 
     def _get_relevant_documents(
@@ -288,6 +260,34 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
                 "One and only one of `return_properties` or `expand_by_hops` must be provided."
             )
 
+    @staticmethod
+    def _clean_element(element: dict[str, Any], embedding_column: str) -> None:
+        """Removes specified keys and embedding from properties in graph element.
+
+        Args:
+          element: A dictionary representing element
+        """
+
+        keys_to_remove = [
+            "source_node_identifier",
+            "destination_node_identifier",
+            "identifier",
+        ]
+        for key in keys_to_remove:
+            if key in element:
+                del element[key]
+
+        if "properties" in element and embedding_column in element["properties"]:
+            del element["properties"][embedding_column]
+
+    @staticmethod
+    def _get_distance_function(distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
+        """Gets the vector distance function."""
+        if distance_strategy == DistanceStrategy.COSINE:
+            return "COSINE_DISTANCE"
+
+        return "EUCLIDEAN_DISTANCE"
+
     def _get_relevant_documents(
         self, question: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
@@ -302,7 +302,9 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
             raise ValueError("`embedding_service` cannot be None")
         query_embeddings = self.embedding_service.embed_query(question)
 
-        distance_fn = get_distance_function(self.query_parameters.distance_strategy)
+        distance_fn = SpannerGraphNodeVectorRetriever._get_distance_function(
+            self.query_parameters.distance_strategy
+        )
 
         VECTOR_QUERY = """
             GRAPH {graph_name}
@@ -359,7 +361,9 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
             for response in responses:
                 elements = json.loads((response["path"]).serialize())
                 for element in elements:
-                    clean_element(element, self.embeddings_column)
+                    SpannerGraphNodeVectorRetriever._clean_element(
+                        element, self.embeddings_column
+                    )
                 response["path"] = elements
                 content = dumps(response["path"])
                 documents.append(Document(page_content=content, metadata={}))
