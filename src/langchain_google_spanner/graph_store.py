@@ -30,6 +30,8 @@ from .type_utils import TypeUtility
 
 MUTATION_BATCH_SIZE = 1000
 DEFAULT_DDL_TIMEOUT = 300
+NODE_KIND = "NODE"
+EDGE_KIND = "EDGE"
 
 
 class NodeWrapper(object):
@@ -188,6 +190,65 @@ class ElementSchema(object):
         )
 
     @staticmethod
+    def make_node_schema(
+        node_type: str,
+        node_label: str,
+        graph_name: str,
+        property_types: CaseInsensitiveDict,
+    ) -> ElementSchema:
+        node = ElementSchema()
+        node.types = property_types
+        node.properties = CaseInsensitiveDict({prop: prop for prop in node.types})
+        node.labels = [node_label]
+        node.base_table_name = "%s_%s" % (graph_name, node_label)
+        node.original_name = node_type
+        node.name = node.base_table_name
+        node.kind = NODE_KIND
+        node.key_columns = [ElementSchema.NODE_KEY_COLUMN_NAME]
+        return node
+
+    @staticmethod
+    def make_edge_schema(
+        edge_type: str,
+        edge_label: str,
+        graph_schema: SpannerGraphSchema,
+        key_columns: List[str],
+        property_types: CaseInsensitiveDict,
+        source_node_type: str,
+        target_node_type: str,
+    ) -> ElementSchema:
+        edge = ElementSchema()
+        edge.types = property_types
+        edge.properties = CaseInsensitiveDict({prop: prop for prop in edge.types})
+
+        edge.labels = [edge_label]
+        edge.base_table_name = "%s_%s" % (graph_schema.graph_name, edge_label)
+        edge.key_columns = key_columns
+        edge.original_name = edge_type
+        edge.name = edge.base_table_name
+        edge.kind = EDGE_KIND
+
+        source_node_schema = graph_schema.get_node_schema(source_node_type)
+        if source_node_schema is None:
+            raise ValueError("No source node schema `%s` found" % source_node_type)
+
+        target_node_schema = graph_schema.get_node_schema(target_node_type)
+        if target_node_schema is None:
+            raise ValueError("No target node schema `%s` found" % target_node_type)
+
+        edge.source = NodeReference(
+            source_node_schema.name,
+            [ElementSchema.NODE_KEY_COLUMN_NAME],
+            [ElementSchema.NODE_KEY_COLUMN_NAME],
+        )
+        edge.target = NodeReference(
+            target_node_schema.name,
+            [ElementSchema.NODE_KEY_COLUMN_NAME],
+            [ElementSchema.TARGET_NODE_KEY_COLUMN_NAME],
+        )
+        return edge
+
+    @staticmethod
     def from_static_nodes(
         name: str, graph_name: str, nodes: List[Node]
     ) -> ElementSchema:
@@ -204,31 +265,22 @@ class ElementSchema(object):
         if len(nodes) == 0:
             raise ValueError("The list of nodes should not be empty")
 
-        node = ElementSchema()
-        node.types = CaseInsensitiveDict(
+        types = CaseInsensitiveDict(
             {
                 k: TypeUtility.value_to_param_type(v)
                 for n in nodes
                 for k, v in n.properties.items()
             }
         )
-        if ElementSchema.NODE_KEY_COLUMN_NAME in node.types:
+        if ElementSchema.NODE_KEY_COLUMN_NAME in types:
             raise ValueError(
                 "Node properties should not contain property with name: `%s`"
                 % ElementSchema.NODE_KEY_COLUMN_NAME
             )
-        node.types[ElementSchema.NODE_KEY_COLUMN_NAME] = (
-            TypeUtility.value_to_param_type(nodes[0].id)
+        types[ElementSchema.NODE_KEY_COLUMN_NAME] = TypeUtility.value_to_param_type(
+            nodes[0].id
         )
-
-        node.properties = CaseInsensitiveDict({prop: prop for prop in node.types})
-        node.labels = [name]
-        node.base_table_name = "%s_%s" % (graph_name, name)
-        node.original_name = name
-        node.name = node.base_table_name
-        node.kind = "NODE"
-        node.key_columns = [ElementSchema.NODE_KEY_COLUMN_NAME]
-        return node
+        return ElementSchema.make_node_schema(name, name, graph_name, types)
 
     @staticmethod
     def from_dynamic_nodes(
@@ -247,8 +299,7 @@ class ElementSchema(object):
         if len(nodes) == 0:
             raise ValueError("The list of nodes should not be empty")
 
-        node = ElementSchema()
-        node.types = CaseInsensitiveDict(
+        types = CaseInsensitiveDict(
             {
                 ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME: param_types.JSON,
                 ElementSchema.DYNAMIC_LABEL_COLUMN_NAME: param_types.STRING,
@@ -257,7 +308,7 @@ class ElementSchema(object):
                 ),
             }
         )
-        node.types.update(
+        types.update(
             CaseInsensitiveDict(
                 {
                     k: TypeUtility.value_to_param_type(v)
@@ -267,15 +318,9 @@ class ElementSchema(object):
                 }
             )
         )
-        node.properties = CaseInsensitiveDict({prop: prop for prop in node.types})
-
-        node.labels = ["Node"]
-        node.base_table_name = "%s_Node" % graph_schema.graph_name
-        node.original_name = name
-        node.name = node.base_table_name
-        node.kind = "NODE"
-        node.key_columns = [ElementSchema.NODE_KEY_COLUMN_NAME]
-        return node
+        return ElementSchema.make_node_schema(
+            name, NODE_KIND, graph_schema.graph_name, types
+        )
 
     @staticmethod
     def from_static_edges(
@@ -297,8 +342,7 @@ class ElementSchema(object):
         if len(edges) == 0:
             raise ValueError("The list of edges should not be empty")
 
-        edge = ElementSchema()
-        edge.types = CaseInsensitiveDict(
+        types = CaseInsensitiveDict(
             {
                 k: TypeUtility.value_to_param_type(v)
                 for e in edges
@@ -310,50 +354,29 @@ class ElementSchema(object):
             ElementSchema.NODE_KEY_COLUMN_NAME,
             ElementSchema.TARGET_NODE_KEY_COLUMN_NAME,
         ]:
-            if col_name in edge.types:
+            if col_name in types:
                 raise ValueError(
                     "Edge properties should not contain property with name: `%s`"
                     % col_name
                 )
-        edge.types[ElementSchema.NODE_KEY_COLUMN_NAME] = (
-            TypeUtility.value_to_param_type(edges[0].source.id)
+        types[ElementSchema.NODE_KEY_COLUMN_NAME] = TypeUtility.value_to_param_type(
+            edges[0].source.id
         )
-        edge.types[ElementSchema.TARGET_NODE_KEY_COLUMN_NAME] = (
+        types[ElementSchema.TARGET_NODE_KEY_COLUMN_NAME] = (
             TypeUtility.value_to_param_type(edges[0].target.id)
         )
-
-        edge.properties = CaseInsensitiveDict({prop: prop for prop in edge.types})
-
-        edge.labels = [edges[0].type]
-        edge.base_table_name = "%s_%s" % (graph_name, name)
-        edge.key_columns = [
-            ElementSchema.NODE_KEY_COLUMN_NAME,
-            ElementSchema.TARGET_NODE_KEY_COLUMN_NAME,
-        ]
-
-        edge.original_name = name
-        edge.name = edge.base_table_name
-        edge.kind = "EDGE"
-
-        source_node_schema = graph_schema.get_node_schema(edges[0].source.type)
-        if source_node_schema is None:
-            raise ValueError("No source node schema `%s` found" % edges[0].source.type)
-
-        target_node_schema = graph_schema.get_node_schema(edges[0].target.type)
-        if target_node_schema is None:
-            raise ValueError("No target node schema `%s` found" % edges[0].target.type)
-
-        edge.source = NodeReference(
-            source_node_schema.name,
-            [ElementSchema.NODE_KEY_COLUMN_NAME],
-            [ElementSchema.NODE_KEY_COLUMN_NAME],
+        return ElementSchema.make_edge_schema(
+            name,
+            name,
+            graph_schema,
+            [
+                ElementSchema.NODE_KEY_COLUMN_NAME,
+                ElementSchema.TARGET_NODE_KEY_COLUMN_NAME,
+            ],
+            types,
+            edges[0].source.type,
+            edges[0].target.type,
         )
-        edge.target = NodeReference(
-            target_node_schema.name,
-            [ElementSchema.NODE_KEY_COLUMN_NAME],
-            [ElementSchema.TARGET_NODE_KEY_COLUMN_NAME],
-        )
-        return edge
 
     @staticmethod
     def from_dynamic_edges(
@@ -366,7 +389,7 @@ class ElementSchema(object):
         Parameters:
         - name: name of the schema;
         - graph_name: name of the graph;
-        - nodes: a non-empty list of edges.
+        - edges: a non-empty list of edges.
 
         Returns:
         - ElementSchema: schema representation of the edges.
@@ -374,8 +397,7 @@ class ElementSchema(object):
         if len(edges) == 0:
             raise ValueError("The list of edges should not be empty")
 
-        edge = ElementSchema()
-        edge.types = CaseInsensitiveDict(
+        types = CaseInsensitiveDict(
             {
                 ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME: param_types.JSON,
                 ElementSchema.DYNAMIC_LABEL_COLUMN_NAME: param_types.STRING,
@@ -387,7 +409,7 @@ class ElementSchema(object):
                 ),
             }
         )
-        edge.types.update(
+        types.update(
             CaseInsensitiveDict(
                 {
                     k: TypeUtility.value_to_param_type(v)
@@ -397,39 +419,19 @@ class ElementSchema(object):
                 }
             )
         )
-        edge.properties = CaseInsensitiveDict({prop: prop for prop in edge.types})
-
-        edge.labels = ["Edge"]
-        edge.base_table_name = "%s_Edge" % graph_schema.graph_name
-        edge.key_columns = [
-            ElementSchema.NODE_KEY_COLUMN_NAME,
-            ElementSchema.TARGET_NODE_KEY_COLUMN_NAME,
-            ElementSchema.DYNAMIC_LABEL_COLUMN_NAME,
-        ]
-
-        edge.original_name = name
-        edge.name = edge.base_table_name
-        edge.kind = "EDGE"
-
-        source_node_schema = graph_schema.get_node_schema(edges[0].source.type)
-        if source_node_schema is None:
-            raise ValueError("No source node schema `%s` found" % edges[0].source.type)
-
-        target_node_schema = graph_schema.get_node_schema(edges[0].target.type)
-        if target_node_schema is None:
-            raise ValueError("No target node schema `%s` found" % edges[0].target.type)
-
-        edge.source = NodeReference(
-            source_node_schema.name,
-            [ElementSchema.NODE_KEY_COLUMN_NAME],
-            [ElementSchema.NODE_KEY_COLUMN_NAME],
+        return ElementSchema.make_edge_schema(
+            name,
+            EDGE_KIND,
+            graph_schema,
+            [
+                ElementSchema.NODE_KEY_COLUMN_NAME,
+                ElementSchema.TARGET_NODE_KEY_COLUMN_NAME,
+                ElementSchema.DYNAMIC_LABEL_COLUMN_NAME,
+            ],
+            types,
+            edges[0].source.type,
+            edges[0].target.type,
         )
-        edge.target = NodeReference(
-            target_node_schema.name,
-            [ElementSchema.NODE_KEY_COLUMN_NAME],
-            [ElementSchema.TARGET_NODE_KEY_COLUMN_NAME],
-        )
-        return edge
 
     def add_nodes(
         self, name: str, nodes: List[Node]
@@ -531,6 +533,9 @@ class ElementSchema(object):
         element.name = element_schema["name"]
         element.original_name = element.name
         element.kind = element_schema["kind"]
+        if element.kind not in [NODE_KIND, EDGE_KIND]:
+            raise ValueError("Invalid element kind `{}`".format(element.kind))
+
         element.key_columns = element_schema["keyColumns"]
         element.base_table_name = element_schema["baseTableName"]
         element.labels = element_schema["labelNames"]
@@ -548,7 +553,7 @@ class ElementSchema(object):
             }
         )
 
-        if element.kind == "EDGE":
+        if element.kind == EDGE_KIND:
             element.source = NodeReference(
                 element_schema["sourceNodeTable"]["nodeTableName"],
                 element_schema["sourceNodeTable"]["nodeTableColumns"],
@@ -600,7 +605,7 @@ class ElementSchema(object):
                     to_identifier(get_reference_node_table(self.target.node_name)),
                     ", ".join(to_identifiers(self.target.node_keys)),
                 )
-                if self.kind == "EDGE"
+                if self.kind == EDGE_KIND
                 else ""
             ),
             ",".join(to_identifiers(self.key_columns)),
@@ -608,7 +613,7 @@ class ElementSchema(object):
                 ", INTERLEAVE IN PARENT {}".format(
                     to_identifier(get_reference_node_table(self.source.node_name))
                 )
-                if self.kind == "EDGE"
+                if self.kind == EDGE_KIND
                 else ""
             ),
         )
@@ -944,7 +949,7 @@ class SpannerGraphSchema(object):
                 ),
                 construct_key(element.key_columns),
             ]
-            if element.kind == "EDGE":
+            if element.kind == EDGE_KIND:
                 definition += [
                     construct_node_reference("SOURCE", element.source),
                     construct_node_reference("DESTINATION", element.target),
