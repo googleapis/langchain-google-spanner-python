@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.6.0...v0.6.1) (2025-01-15)
+
+
+### Documentation
+
+* A few minor fixes for the notebook of Graph QA chain ([215ee96](https://github.com/googleapis/langchain-google-spanner-python/commit/215ee96825c012237c9ab69ac3a4d33102b28f8b))
+
 ## [0.6.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.5.0...v0.6.0) (2024-12-05)
 
 
