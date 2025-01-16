@@ -139,7 +139,7 @@ class DialectSemantics(ABC):
         )
 
 
-class GoogleSqlSemnatics(DialectSemantics):
+class GoogleSqlSemantics(DialectSemantics):
     """
     Implementation of dialect semantics for Google SQL.
     """
@@ -163,7 +163,7 @@ class GoogleSqlSemnatics(DialectSemantics):
         return dict(zip(columns, values))
 
 
-class PGSqlSemnatics(DialectSemantics):
+class PGSqlSemantics(DialectSemantics):
     """
     Implementation of dialect semantics for PostgreSQL.
     """
@@ -499,11 +499,11 @@ class SpannerVectorStore(VectorStore):
 
         self._database.reload()
 
-        self._dialect_semantics: DialectSemantics = GoogleSqlSemnatics()
+        self._dialect_semantics: DialectSemantics = GoogleSqlSemantics()
         types = self.GSQL_TYPES
 
         if self._database.database_dialect == DatabaseDialect.POSTGRESQL:
-            self._dialect_semantics = PGSqlSemnatics()
+            self._dialect_semantics = PGSqlSemantics()
             types = self.PGSQL_TYPES
 
         if not self._database.exists():
