@@ -14,13 +14,12 @@
 
 from __future__ import annotations
 
-import datetime
-import logging
 from abc import ABC, abstractmethod
+import datetime
 from enum import Enum
+import logging
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
 
-import numpy as np
 from google.cloud import spanner  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from google.cloud.spanner_v1 import JsonObject, param_types
@@ -28,6 +27,7 @@ from langchain_community.vectorstores.utils import maximal_marginal_relevance
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
+import numpy as np
 
 from .version import __version__
 
@@ -87,6 +87,10 @@ class SecondaryIndex:
     index_name: str
     columns: list[str]
     storing_columns: Optional[list[str]] = None
+    num_leaves: Optional[int] = None  # Only necessary for ANN
+    num_branches: Optional[int] = None  # Only necessary for ANN
+    tree_depth: Optional[int] = None  # Only necessary for ANN
+    index_type: Optional[DistanceStrategy] = None  # Only necessary for ANN
 
     def __post_init__(self):
         # Check if column_name is None after initialization
@@ -104,6 +108,17 @@ class DistanceStrategy(Enum):
 
     COSINE = 1
     EUCLIDEIAN = 2
+    DOT_PRODUCT = 3
+
+    def __str__(self):
+        return DISTANCE_STRATEGY_STRING[self]
+
+
+DISTANCE_STRATEGY_STRING = {
+    DistanceStrategy.COSINE: "COSINE",
+    DistanceStrategy.EUCLIDEIAN: "EUCLIDEIAN",
+    DistanceStrategy.DOT_PRODUCT: "DOT_PRODUCT",
+}
 
 
 class DialectSemantics(ABC):
@@ -139,16 +154,32 @@ class DialectSemantics(ABC):
         )
 
 
+_GOOGLE_DISTANCE_ALGO_NAMES = {
+    DistanceStrategy.COSINE: "COSINE_DISTANCE",
+    DistanceStrategy.DOT_PRODUCT: "DOT_PRODUCT",
+    DistanceStrategy.EUCLIDEIAN: "EUCLIDEAN_DISTANCE",
+}
+
+distance_strategy_to_ANN_function = {
+    DistanceStrategy.COSINE: "APPROX_COSINE_DISTANCE",
+    DistanceStrategy.DOT_PRODUCT: "APPROX_DOT_PRODUCT",
+    DistanceStrategy.EUCLIDEIAN: "APPROX_EUCLIDEAN_DISTANCE",
+}
+
+_GOOGLE_ALGO_INDEX_NAME = {
+    DistanceStrategy.COSINE: "COSINE",
+    DistanceStrategy.DOT_PRODUCT: "DOT_PRODUCT",
+    DistanceStrategy.EUCLIDEIAN: "EUCLIDEAN",
+}
+
+
 class GoogleSqlSemnatics(DialectSemantics):
     """
     Implementation of dialect semantics for Google SQL.
     """
 
     def getDistanceFunction(self, distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
-        if distance_strategy == DistanceStrategy.COSINE:
-            return "COSINE_DISTANCE"
-
-        return "EUCLIDEAN_DISTANCE"
+        return _GOOGLE_DISTANCE_ALGO_NAMES.get(distance_strategy, "EUCLIDEAN")
 
     def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
         where_clause_condition = " AND ".join(
@@ -162,6 +193,19 @@ class GoogleSqlSemnatics(DialectSemantics):
     def getDeleteDocumentsValueParameters(self, columns, values) -> Dict[str, Any]:
         return dict(zip(columns, values))
 
+    def getIndexDistanceType(self, distance_strategy) -> str:
+        value = _GOOGLE_ALGO_INDEX_NAME.get(distance_strategy, None)
+        if value is None:
+            raise Exception(f"{distance_strategy} is unsupported for distance_type")
+        return value
+
+
+_PG_DISTANCE_ALGO_NAMES = {
+    DistanceStrategy.COSINE: "spanner.cosine_distance",
+    DistanceStrategy.DOT_PRODUCT: "spanner.dot_product",
+    DistanceStrategy.EUCLIDEIAN: "spanner.euclidean_distance",
+}
+
 
 class PGSqlSemnatics(DialectSemantics):
     """
@@ -169,9 +213,12 @@ class PGSqlSemnatics(DialectSemantics):
     """
 
     def getDistanceFunction(self, distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
-        if distance_strategy == DistanceStrategy.COSINE:
-            return "spanner.cosine_distance"
-        return "spanner.euclidean_distance"
+        name = _PG_DISTANCE_ALGO_NAMES.get(distance_strategy, None)
+        if name is None:
+            raise Exception(
+                "Unsupported PostgreSQL distance strategy: {}".format(distance_strategy)
+            )
+        return name
 
     def getDeleteDocumentsParameters(self, columns) -> Tuple[str, Any]:
         where_clause_condition = " AND ".join(
@@ -210,6 +257,7 @@ class QueryParameters:
         """
 
         EXACT_NEAREST_NEIGHBOR = 1
+        APPROXIMATE_NEAREST_NEIGHBOR = 2
 
     def __init__(
         self,
@@ -254,6 +302,15 @@ class QueryParameters:
             self.staleness = {key: value}
 
 
+DEFAULT_ANN_TREE_DEPTH = 2
+ANN_ACCEPTABLE_TREE_DEPTHS = (2, 3)
+
+
+class AlgoKind(Enum):
+    KNN = 0
+    ANN = 1
+
+
 class SpannerVectorStore(VectorStore):
     GSQL_TYPES = {
         CONTENT_COLUMN_NAME: ["STRING"],
@@ -284,6 +341,7 @@ class SpannerVectorStore(VectorStore):
         primary_key: Optional[str] = None,
         vector_size: Optional[int] = None,
         secondary_indexes: Optional[List[SecondaryIndex]] = None,
+        kind: AlgoKind = None,
     ) -> bool:
         """
         Initialize the vector store new table in Google Cloud Spanner.
@@ -322,6 +380,7 @@ class SpannerVectorStore(VectorStore):
             metadata_columns,
             primary_key,
             secondary_indexes,
+            kind=kind,
         )
 
         operation = database.update_ddl(ddl)
@@ -341,6 +400,8 @@ class SpannerVectorStore(VectorStore):
         column_configs,
         primary_key,
         secondary_indexes: Optional[List[SecondaryIndex]] = None,
+        kind: Optional[AlgoKind] = AlgoKind.KNN,
+        limit=None,
     ):
         """
         Generate SQL for creating the vector store table.
@@ -356,6 +417,40 @@ class SpannerVectorStore(VectorStore):
         Returns:
         - str: The generated SQL.
         """
+
+        ddl_statements = [
+            SpannerVectorStore._generate_create_table_sql(
+                table_name,
+                id_column,
+                content_column,
+                embedding_column,
+                column_configs,
+                primary_key,
+                dialect,
+            )
+        ]
+
+        if kind == AlgoKind.ANN:
+            ddl_statements += SpannerVectorStore._generate_secondary_indices_ddl_ANN(
+                table_name, dialect, secondary_indexes
+            )
+        else:
+            ddl_statements += SpannerVectorStore._generate_secondary_indices_ddl_KNN(
+                table_name, embedding_column, dialect, secondary_indexes
+            )
+
+        return ddl_statements
+
+    @staticmethod
+    def _generate_create_table_sql(
+        table_name,
+        id_column,
+        content_column,
+        embedding_column,
+        column_configs,
+        primary_key,
+        dialect=DatabaseDialect.GOOGLE_STANDARD_SQL,
+    ):
         create_table_statement = f"CREATE TABLE {table_name} (\n"
 
         if not isinstance(id_column, TableColumn):
@@ -416,30 +511,66 @@ class SpannerVectorStore(VectorStore):
                 + ")"
             )
 
+        return create_table_statement
+
+    @staticmethod
+    def _generate_secondary_indices_ddl_KNN(
+        table_name, embedding_column, dialect, secondary_indexes=None
+    ):
+        if not secondary_indexes:
+            return []
+
+        secondary_index_ddl_statements = []
+        for secondary_index in secondary_indexes:
+            statement = f"CREATE INDEX {secondary_index.index_name} ON {table_name}("
+            statement = statement + ",".join(secondary_index.columns) + ")  "
+
+            if dialect == DatabaseDialect.POSTGRESQL:
+                statement = statement + "INCLUDE ("
+            else:
+                statement = statement + "STORING ("
+
+            if secondary_index.storing_columns is None:
+                secondary_index.storing_columns = [embedding_column.name]
+            elif embedding_column not in secondary_index.storing_columns:
+                secondary_index.storing_columns.append(embedding_column.name)
+
+            statement = statement + ",".join(secondary_index.storing_columns) + ")"
+            secondary_index_ddl_statements.append(statement)
+        return secondary_index_ddl_statements
+
+    @staticmethod
+    def _generate_secondary_indices_ddl_ANN(
+        table_name, dialect=DatabaseDialect.GOOGLE_STANDARD_SQL, secondary_indexes=[]
+    ):
+        if dialect != DatabaseDialect.GOOGLE_STANDARD_SQL:
+            raise Exception(
+                f"ANN is only supported for the GoogleSQL dialect not {dialect}"
+            )
+
         secondary_index_ddl_statements = []
 
-        if secondary_indexes is not None:
-            for secondary_index in secondary_indexes:
-                statement = (
-                    f"CREATE INDEX {secondary_index.index_name} ON {table_name}("
-                )
-                statement = statement + ",".join(secondary_index.columns) + ")  "
+        for secondary_index in secondary_indexes:
+            statement = f"CREATE VECTOR INDEX {secondary_index.index_name}\n\tON {table_name}({secondary_index.columns[0]})"
+            options_segments = [f"distance_type='{secondary_index.index_type}'"]
+            if secondary_index.tree_depth > 0:
+                tree_depth = secondary_index.tree_depth
+                if tree_depth not in ANN_ACCEPTABLE_TREE_DEPTHS:
+                    raise Exception(
+                        f"tree_depth: {tree_depth} is not in the acceptable values: {ANN_ACCEPTABLE_TREE_DEPTHS}"
+                    )
+                options_segments.append(f"tree_depth={secondary_index.tree_depth}")
 
-                if dialect == DatabaseDialect.POSTGRESQL:
-                    statement = statement + "INCLUDE ("
-                else:
-                    statement = statement + "STORING ("
+            if secondary_index.num_branches > 0:
+                options_segments.append(f"num_branches={secondary_index.num_branches}")
 
-                if secondary_index.storing_columns is None:
-                    secondary_index.storing_columns = [embedding_column.name]
-                elif embedding_column not in secondary_index.storing_columns:
-                    secondary_index.storing_columns.append(embedding_column.name)
+            if secondary_index.num_leaves > 0:
+                options_segments.append(f"num_leaves={secondary_index.num_leaves}")
 
-                statement = statement + ",".join(secondary_index.storing_columns) + ")"
+            statement += "\n\tOPTIONS(" + ", ".join(options_segments) + ")"
+            secondary_index_ddl_statements.append(statement.strip())
 
-                secondary_index_ddl_statements.append(statement)
-
-        return [create_table_statement] + secondary_index_ddl_statements
+        return secondary_index_ddl_statements
 
     def __init__(
         self,
@@ -832,7 +963,7 @@ class SpannerVectorStore(VectorStore):
             List[Document]: List of documents most similar to the query.
         """
 
-        results, column_order_map = self._get_rows_by_similarity_search(
+        results, column_order_map = self._get_rows_by_similarity_search_knn(
             embedding, k, pre_filter
         )
         documents = self._get_documents_from_query_results(
@@ -840,7 +971,86 @@ class SpannerVectorStore(VectorStore):
         )
         return documents
 
-    def _get_rows_by_similarity_search(
+    def search_by_ANN(
+        self,
+        column_name: str,
+        table_name: str,
+        index_name: str,
+        embedding: List[float],
+        embedding_column_name: str,
+        num_leaves: int,
+        strategy: DistanceStrategy = DistanceStrategy.COSINE,
+        limit: int = None,
+        is_embedding_nullable: bool = False,
+        where_condition: str = None,
+    ) -> List[Any]:
+        sql = SpannerVectorStore._query_ANN(
+            column_name,
+            table_name,
+            index_name,
+            embedding,
+            embedding_column_name,
+            num_leaves,
+            strategy,
+            limit,
+            is_embedding_nullable,
+            where_condition,
+        )
+        staleness = self._query_parameters.staleness
+        with self._database.snapshot(
+            **staleness if staleness is not None else {}
+        ) as snapshot:
+            results = snapshot.execute_sql(
+                sql=sql_query,
+            )
+            return list(results)
+
+    @staticmethod
+    def _query_ANN(
+        column_name: str,
+        table_name: str,
+        index_name: str,
+        embedding: List[float],
+        embedding_column_name: str,
+        num_leaves: int,
+        strategy: DistanceStrategy = DistanceStrategy.COSINE,
+        limit: int = None,
+        is_embedding_nullable: bool = False,
+        where_condition: str = None,
+    ):
+        """
+        Sample query:
+            SELECT DocId
+            FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}
+            ORDER BY APPROX_EUCLIDEAN_DISTANCE(
+              ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding,
+              options => JSON '{"num_leaves_to_search": 10}')
+            LIMIT 100
+        """
+
+        ann_strategy_name = distance_strategy_to_ANN_function.get(strategy, None)
+        if not ann_strategy_name:
+            raise Exception(f"{strategy} is not supported for ANN")
+
+        sql = (
+            f"SELECT {column_name} FROM {table_name}"
+            + "@{FORCE_INDEX="
+            + f"{index_name}"
+            + "}\n"
+            + f" ORDER BY {ann_strategy_name}(\n"
+            + f"  ARRAY<FLOAT32>{embedding}, {embedding_column_name}, options => JSON '"
+            + '{"num_leaves_to_search": %s})\n' % (num_leaves)
+        )
+
+        if where_condition:
+            sql += " WHERE " + where_condition + "\n"
+
+        if limit:
+            sql += f"LIMIT {limit}"
+
+        return sql
+
+    def _get_rows_by_similarity_search_knn(
         self,
         embedding: List[float],
         k: int,
@@ -1017,7 +1227,7 @@ class SpannerVectorStore(VectorStore):
             List of Documents and similarity scores selected by maximal marginal
                 relevance and score for each.
         """
-        results, column_order_map = self._get_rows_by_similarity_search(
+        results, column_order_map = self._get_rows_by_similarity_search_knn(
             embedding, fetch_k, pre_filter
         )
 
