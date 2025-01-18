@@ -23,9 +23,8 @@ from langchain_core.documents import Document
 from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
 
 from langchain_google_spanner.graph_retriever import (
-    SpannerGraphGQLRetriever,
-    SpannerGraphNodeVectorRetriever,
-    SpannerGraphSemanticGQLRetriever,
+    SpannerGraphTextToGQLRetriever,
+    SpannerGraphVectorContextRetriever,
 )
 from langchain_google_spanner.graph_store import SpannerGraphStore
 
@@ -167,7 +166,7 @@ class TestRetriever:
 
     def test_spanner_graph_gql_retriever(self, setup_db_load_data):
         graph, suffix = setup_db_load_data
-        retriever = SpannerGraphGQLRetriever.from_params(
+        retriever = SpannerGraphTextToGQLRetriever.from_params(
             graph_store=graph,
             llm=get_llm(),
         )
@@ -179,7 +178,7 @@ class TestRetriever:
     def test_spanner_graph_semantic_gql_retriever(self, setup_db_load_data):
         graph, suffix = setup_db_load_data
         suffix = "_" + suffix
-        retriever = SpannerGraphSemanticGQLRetriever.from_params(
+        retriever = SpannerGraphTextToGQLRetriever.from_params(
             graph_store=graph,
             llm=get_llm(),
             embedding_service=get_embedding(),
@@ -213,7 +212,7 @@ class TestRetriever:
         with pytest.raises(ValueError):
             graph, suffix = setup_db_load_data
             suffix = "_" + suffix
-            SpannerGraphNodeVectorRetriever.from_params(
+            SpannerGraphVectorContextRetriever.from_params(
                 graph_store=graph,
                 embedding_service=get_embedding(),
                 label_expr="Person{}".format(suffix),
@@ -224,7 +223,7 @@ class TestRetriever:
     def test_spanner_graph_vector_node_retriever(self, setup_db_load_data):
         graph, suffix = setup_db_load_data
         suffix = "_" + suffix
-        retriever = SpannerGraphNodeVectorRetriever.from_params(
+        retriever = SpannerGraphVectorContextRetriever.from_params(
             graph_store=graph,
             embedding_service=get_embedding(),
             label_expr="Person{}".format(suffix),
@@ -240,7 +239,7 @@ class TestRetriever:
     def test_spanner_graph_vector_node_retriever_2(self, setup_db_load_data):
         graph, suffix = setup_db_load_data
         suffix = "_" + suffix
-        retriever = SpannerGraphNodeVectorRetriever.from_params(
+        retriever = SpannerGraphVectorContextRetriever.from_params(
             graph_store=graph,
             embedding_service=get_embedding(),
             label_expr="Person{}".format(suffix),

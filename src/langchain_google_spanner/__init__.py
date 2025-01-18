@@ -15,9 +15,8 @@
 from langchain_google_spanner.chat_message_history import SpannerChatMessageHistory
 from langchain_google_spanner.graph_qa import SpannerGraphQAChain
 from langchain_google_spanner.graph_retriever import (
-    SpannerGraphGQLRetriever,
-    SpannerGraphNodeVectorRetriever,
-    SpannerGraphSemanticGQLRetriever,
+    SpannerGraphTextToGQLRetriever,
+    SpannerGraphVectorContextRetriever,
 )
 from langchain_google_spanner.graph_store import SpannerGraphStore
 from langchain_google_spanner.vector_store import (
@@ -43,7 +42,6 @@ __all__ = [
     "SecondaryIndex",
     "QueryParameters",
     "DistanceStrategy",
-    "SpannerGraphGQLRetriever",
-    "SpannerGraphNodeVectorRetriever",
-    "SpannerGraphSemanticGQLRetriever",
+    "SpannerGraphTextToGQLRetriever",
+    "SpannerGraphVectorContextRetriever",
 ]

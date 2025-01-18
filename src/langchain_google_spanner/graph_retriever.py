@@ -55,61 +55,12 @@ def get_graph_name_from_schema(schema: str) -> str:
     return "`" + json.loads(schema)["Name of graph"] + "`"
 
 
-class SpannerGraphGQLRetriever(BaseRetriever):
+class SpannerGraphTextToGQLRetriever(BaseRetriever):
     """A Retriever that translates natural language queries to GQL and
     queries SpannerGraphStore using the GQL.
     Returns the documents retrieved as result.
-    """
-
-    graph_store: SpannerGraphStore = Field(exclude=True)
-    gql_chain: RunnableSequence
-    k: int = 10
-    """Number of top results to return"""
-
-    @classmethod
-    def from_params(
-        cls, llm: Optional[BaseLanguageModel] = None, **kwargs: Any
-    ) -> "SpannerGraphGQLRetriever":
-        if llm is None:
-            raise ValueError("`llm` cannot be none")
-        gql_chain: RunnableSequence = RunnableSequence(
-            GQL_GENERATION_PROMPT | llm | StrOutputParser()
-        )
-        return cls(gql_chain=gql_chain, **kwargs)
-
-    def _get_relevant_documents(
-        self, question: str, *, run_manager: CallbackManagerForRetrieverRun
-    ) -> List[Document]:
-        """Translate the natural language query to GQL, execute it,
-        and return the results as Documents.
-        """
-
-        # 1. Generate gql query from natural language query using LLM
-        gql_query = extract_gql(
-            self.gql_chain.invoke(
-                {
-                    "question": question,
-                    "schema": self.graph_store.get_schema,
-                }
-            )
-        )
-        print(gql_query)
-
-        # 2. Execute the gql query against spanner graph
-        responses = self.graph_store.query(gql_query)[: self.k]
-
-        # 3. Transform the results into a list of Documents
-        documents = []
-        for response in responses:
-            documents.append(convert_to_doc(response))
-        return documents
-
-
-class SpannerGraphSemanticGQLRetriever(BaseRetriever):
-    """A Retriever that translates natural language queries to GQL and
-    and queries SpannerGraphStore to retrieve documents. It uses a semantic
-    similarity model to compare the input question to a set of examples to
-    generate the GQL query.
+    If examples are provided, it uses a semantic similarity model to compare the
+    input question to a set of examples to generate the GQL query.
     """
 
     graph_store: SpannerGraphStore = Field(exclude=True)
@@ -124,14 +75,16 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
         llm: Optional[BaseLanguageModel] = None,
         embedding_service: Optional[Embeddings] = None,
         **kwargs: Any,
-    ) -> "SpannerGraphSemanticGQLRetriever":
+    ) -> "SpannerGraphTextToGQLRetriever":
         if llm is None:
             raise ValueError("`llm` cannot be none")
-        if embedding_service is None:
-            raise ValueError("`embedding_service` cannot be none")
-        selector = SemanticSimilarityExampleSelector.from_examples(
-            [], embedding_service, InMemoryVectorStore, k=2
-        )
+        # if embedding_service is None:
+        #    raise ValueError("`embedding_service` cannot be none")
+        selector = None
+        if embedding_service is not None:
+            selector = SemanticSimilarityExampleSelector.from_examples(
+                [], embedding_service, InMemoryVectorStore, k=2
+            )
         return cls(
             llm=llm,
             selector=selector,
@@ -158,7 +111,7 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
         self.selector.add_example(
             {
                 "input": question,
-                "query": SpannerGraphSemanticGQLRetriever._duplicate_braces_in_string(
+                "query": SpannerGraphTextToGQLRetriever._duplicate_braces_in_string(
                     gql
                 ),
             }
@@ -174,20 +127,26 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
 
         if self.llm is None:
             raise ValueError("`llm` cannot be None")
-        if self.selector is None:
-            raise ValueError("`selector` cannot be None")
+
+        # if self.selector is None:
+        # raise ValueError("`selector` cannot be None")
 
         # Define the prompt template
-        prompt = FewShotPromptTemplate(
-            example_selector=self.selector,
-            example_prompt=PromptTemplate.from_template(
-                "Question: {input}\nGQL Query: {query}"
-            ),
-            prefix="""
-            Create an ISO GQL query for the question using the schema.""",
-            suffix=DEFAULT_GQL_TEMPLATE_PART1,
-            input_variables=["question", "schema"],
-        )
+        prompt = None
+        if self.selector is None:
+            prompt = GQL_GENERATION_PROMPT
+        else:
+            # Define the prompt template
+            prompt = FewShotPromptTemplate(
+                example_selector=self.selector,
+                example_prompt=PromptTemplate.from_template(
+                    "Question: {input}\nGQL Query: {query}"
+                ),
+                prefix="""
+                Create an ISO GQL query for the question using the schema.""",
+                suffix=DEFAULT_GQL_TEMPLATE_PART1,
+                input_variables=["question", "schema"],
+            )
 
         # Initialize the chain
         gql_chain = prompt | self.llm | StrOutputParser()
@@ -212,7 +171,7 @@ class SpannerGraphSemanticGQLRetriever(BaseRetriever):
         return documents
 
 
-class SpannerGraphNodeVectorRetriever(BaseRetriever):
+class SpannerGraphVectorContextRetriever(BaseRetriever):
     """Retriever that does a vector search on nodes in a SpannerGraphStore.
     If expand_by_hops is provided , the nodes (and edges) at a distance upto
     the expand_by hops will also be returned.
@@ -237,7 +196,7 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
     @classmethod
     def from_params(
         cls, embedding_service: Optional[Embeddings] = None, **kwargs: Any
-    ) -> "SpannerGraphNodeVectorRetriever":
+    ) -> "SpannerGraphVectorContextRetriever":
         if embedding_service is None:
             raise ValueError("`embedding_service` cannot be None")
         return cls(
@@ -302,7 +261,7 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
             raise ValueError("`embedding_service` cannot be None")
         query_embeddings = self.embedding_service.embed_query(question)
 
-        distance_fn = SpannerGraphNodeVectorRetriever._get_distance_function(
+        distance_fn = SpannerGraphVectorContextRetriever._get_distance_function(
             self.query_parameters.distance_strategy
         )
 
@@ -361,7 +320,7 @@ class SpannerGraphNodeVectorRetriever(BaseRetriever):
             for response in responses:
                 elements = json.loads((response["path"]).serialize())
                 for element in elements:
-                    SpannerGraphNodeVectorRetriever._clean_element(
+                    SpannerGraphVectorContextRetriever._clean_element(
                         element, self.embeddings_column
                     )
                 response["path"] = elements
