@@ -129,9 +129,7 @@ class SpannerGraphTextToGQLRetriever(BaseRetriever):
         gql_chain: RunnableSequence
         if self.selector is None:
             generic_prompt = GQL_GENERATION_PROMPT
-            gql_chain = RunnableSequence(
-                generic_prompt | self.llm | StrOutputParser()
-            )
+            gql_chain = RunnableSequence(generic_prompt | self.llm | StrOutputParser())
         else:
             # Define the prompt template
             few_shot_prompt = FewShotPromptTemplate(
@@ -144,9 +142,7 @@ class SpannerGraphTextToGQLRetriever(BaseRetriever):
                 suffix=DEFAULT_GQL_TEMPLATE_PART1,
                 input_variables=["question", "schema"],
             )
-            gql_chain = RunnableSequence (
-                few_shot_prompt | self.llm | StrOutputParser()
-            )
+            gql_chain = RunnableSequence(few_shot_prompt | self.llm | StrOutputParser())
 
         # 1. Generate gql query from natural language query using LLM
         gql_query = extract_gql(
