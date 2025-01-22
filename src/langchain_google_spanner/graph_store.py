@@ -18,7 +18,7 @@ import json
 import re
 import string
 from abc import abstractmethod
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, Generator, Iterable, List, Mapping, Optional, Tuple, Union
 
 from google.cloud import spanner
 from google.cloud.spanner_v1 import JsonObject, param_types
@@ -435,14 +435,14 @@ class ElementSchema(object):
 
     def add_nodes(
         self, name: str, nodes: List[Node]
-    ) -> Tuple[str, List[str], List[List[Any]]]:
+    ) -> Generator[Tuple[str, Tuple[str], List[List[Any]]], None, None]:
         """Builds the data required to add a list of nodes to Spanner.
 
         Parameters:
           - name: type of name;
           - nodes: a list of Nodes.
 
-        Returns:
+        Returns an iterator that yields a tuple consists of the following:
           - str: a table name;
           - List[str]: a list of column names;
           - List[List[Any]]: a list of rows.
@@ -450,8 +450,9 @@ class ElementSchema(object):
         if len(nodes) == 0:
             raise ValueError("Empty list of nodes")
 
-        columns = [k for k in self.types.keys()]
-        rows = []
+        # Group changes by columns: this avoids overwriting columns that aren't
+        # specified.
+        rows_by_columns: Dict[Tuple[str], List[List[Any]]] = {}
         for node in nodes:
             properties = node.properties.copy()
             properties[ElementSchema.NODE_KEY_COLUMN_NAME] = node.id
@@ -462,27 +463,31 @@ class ElementSchema(object):
                     for k, v in node.properties.items()
                     if k not in self.types
                 }
-                # Json loads and dumps handles some invalid characters
-                # that the JsonDecoder doesn't accept.
-                properties[ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME] = JsonObject(
-                    json.loads(json.dumps(dynamic_properties))
-                )
+                if dynamic_properties:
+                    # Json loads and dumps handles some invalid characters
+                    # that the JsonDecoder doesn't accept.
+                    properties[ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME] = JsonObject(
+                        json.loads(json.dumps(dynamic_properties))
+                    )
                 properties[ElementSchema.DYNAMIC_LABEL_COLUMN_NAME] = node.type
 
-            row = [properties.get(k, None) for k in columns]
-            rows.append(row)
-        return self.base_table_name, columns, rows
+            columns = tuple(sorted((k for k in properties if k in self.types)))
+            row = [properties[k] for k in columns]
+            rows_by_columns.setdefault(columns, []).append(row)
+
+        for columns, rows in rows_by_columns.items():
+            yield self.base_table_name, columns, rows
 
     def add_edges(
         self, name: str, edges: List[Relationship]
-    ) -> Tuple[str, List[str], List[List[Any]]]:
+    ) -> Generator[Tuple[str, Tuple[str], List[List[Any]]], None, None]:
         """Builds the data required to add a list of edges to Spanner.
 
         Parameters:
           - name: type of edge;
           - edges: a list of Relationships.
 
-        Returns:
+        Returns an iterator that yields a tuple consists of the following:
           - str: a table name;
           - List[str]: a list of column names;
           - List[List[Any]]: a list of rows.
@@ -490,8 +495,9 @@ class ElementSchema(object):
         if len(edges) == 0:
             raise ValueError("Empty list of edges")
 
-        columns = [k for k in self.types.keys()]
-        rows = []
+        # Group changes by columns: this avoids overwriting columns that aren't
+        # specified.
+        rows_by_columns: Dict[Tuple[str], List[List[Any]]] = {}
         for edge in edges:
             properties = edge.properties.copy()
             properties[ElementSchema.NODE_KEY_COLUMN_NAME] = edge.source.id
@@ -503,16 +509,20 @@ class ElementSchema(object):
                     for k, v in edge.properties.items()
                     if k not in self.types
                 }
-                # Json loads and dumps handles some invalid characters
-                # that the JsonDecoder doesn't accept.
-                properties[ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME] = JsonObject(
-                    json.loads(json.dumps(dynamic_properties))
-                )
+                if dynamic_properties:
+                    # Json loads and dumps handles some invalid characters
+                    # that the JsonDecoder doesn't accept.
+                    properties[ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME] = JsonObject(
+                        json.loads(json.dumps(dynamic_properties))
+                    )
                 properties[ElementSchema.DYNAMIC_LABEL_COLUMN_NAME] = edge.type
 
-            row = [properties.get(k, None) for k in columns]
-            rows.append(row)
-        return self.base_table_name, columns, rows
+            columns = tuple(sorted((k for k in properties if k in self.types)))
+            row = [properties[k] for k in columns]
+            rows_by_columns.setdefault(columns, []).append(row)
+
+        for columns, rows in rows_by_columns.items():
+            yield self.base_table_name, columns, rows
 
     @staticmethod
     def from_info_schema(
@@ -1037,14 +1047,14 @@ class SpannerGraphSchema(object):
 
     def add_nodes(
         self, name: str, nodes: List[Node]
-    ) -> Tuple[str, List[str], List[List[Any]]]:
+    ) -> Generator[Tuple[str, Tuple[str], List[List[Any]]], None, None]:
         """Builds the data required to add a list of nodes to Spanner.
 
         Parameters:
           - name: type of name;
           - nodes: a list of Nodes.
 
-        Returns:
+        Returns an iterator that yields a tuple consists of the following:
           - str: a table name;
           - List[str]: a list of column names;
           - List[List[Any]]: a list of rows.
@@ -1052,18 +1062,19 @@ class SpannerGraphSchema(object):
         node_schema = self.get_node_schema(name)
         if node_schema is None:
             raise ValueError("Unknown node schema: `%s`" % name)
-        return node_schema.add_nodes(name, nodes)
+        for v in node_schema.add_nodes(name, nodes):
+            yield v
 
     def add_edges(
         self, name: str, edges: List[Relationship]
-    ) -> Tuple[str, List[str], List[List[Any]]]:
+    ) -> Generator[Tuple[str, Tuple[str], List[List[Any]]], None, None]:
         """Builds the data required to add a list of edges to Spanner.
 
         Parameters:
           - name: type of edge;
           - edges: a list of Relationships.
 
-        Returns:
+        Returns an iterator that yields a tuple consists of the following:
           - str: a table name;
           - List[str]: a list of column names;
           - List[List[Any]]: a list of rows.
@@ -1071,7 +1082,8 @@ class SpannerGraphSchema(object):
         edge_schema = self.get_edge_schema(name)
         if edge_schema is None:
             raise ValueError("Unknown edge schema `%s`" % name)
-        return edge_schema.add_edges(name, edges)
+        for v in edge_schema.add_edges(name, edges):
+            yield v
 
 
 class SpannerImpl(object):
@@ -1133,13 +1145,13 @@ class SpannerImpl(object):
         return op.result(options.get("timeout", DEFAULT_DDL_TIMEOUT))
 
     def insert_or_update(
-        self, table: str, columns: List[str], values: List[List[Any]]
+        self, table: str, columns: Tuple[str], values: List[List[Any]]
     ) -> None:
         """Insert or update the table.
 
         Parameters:
         - table: Spanner table name;
-        - columns: list of column names;
+        - columns: a tuple of column names;
         - values: list of values.
         """
 
@@ -1216,18 +1228,16 @@ class SpannerGraphStore(GraphStore):
         for name, elements in nodes.items():
             if len(elements) == 0:
                 continue
-            table, columns, rows = self.schema.add_nodes(name, elements)
-
-            print("Insert nodes of type `{}`...".format(name))
-            self.impl.insert_or_update(table, columns, rows)
+            for table, columns, rows in self.schema.add_nodes(name, elements):
+                print("Insert nodes of type `{}`...".format(name))
+                self.impl.insert_or_update(table, columns, rows)
 
         for name, elements in edges.items():
             if len(elements) == 0:
                 continue
-            table, columns, rows = self.schema.add_edges(name, elements)
-
-            print("Insert edges of type `{}`...".format(name))
-            self.impl.insert_or_update(table, columns, rows)
+            for table, columns, rows in self.schema.add_edges(name, elements):
+                print("Insert edges of type `{}`...".format(name))
+                self.impl.insert_or_update(table, columns, rows)
 
     def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
         """Query Spanner database.

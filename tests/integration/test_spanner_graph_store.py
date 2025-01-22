@@ -299,3 +299,99 @@ class TestSpannerGraphStore:
         finally:
             print("Clean up graph with name `{}`".format(graph_name))
             graph.cleanup()
+
+    @pytest.mark.parametrize("use_flexible_schema", [False, True])
+    def test_spanner_graph_avoid_unnecessary_overwrite(self, use_flexible_schema):
+        suffix = random_string(num_char=5, exclude_whitespaces=True)
+        graph_name = "test_graph{}".format(suffix)
+        graph = SpannerGraphStore(
+            instance_id,
+            google_database,
+            graph_name,
+            client=Client(project=project_id),
+            use_flexible_schema=use_flexible_schema,
+            static_node_properties=["a", "b"],
+            static_edge_properties=["a", "b"],
+        )
+        graph.refresh_schema()
+
+        try:
+            node0 = Node(
+                id=random_string(),
+                type="Node{}".format(suffix),
+                properties={"a": 1, "b": 1},
+            )
+            node1 = Node(
+                id=random_string(),
+                type="Node{}".format(suffix),
+                properties={"a": 1, "b": 1},
+            )
+            edge0 = Relationship(
+                source=node0,
+                target=node1,
+                type="Edge{}".format(suffix),
+                properties={"a": 1, "b": 1},
+            )
+            doc = GraphDocument(
+                nodes=[node0, node1],
+                relationships=[edge0],
+                source=Document(
+                    page_content="Hello, world!",
+                    metadata={"source": "https://example.com"},
+                ),
+            )
+
+            query = """GRAPH {}
+                   MATCH (n {{id: @nodeId}})
+                   LET properties = TO_JSON(n)['properties']
+                   RETURN int64(properties.a) AS a, int64(properties.b) AS b
+                   UNION ALL
+                   MATCH -[e {{id: @nodeId}}]->
+                   LET properties = TO_JSON(e)['properties']
+                   RETURN int64(properties.a) AS a, int64(properties.b) AS b
+                """.format(
+                graph_name
+            )
+            graph.add_graph_documents([doc])
+
+            # Test initial value: a=1, b=1
+            results = graph.query(query, {"nodeId": node0.id})
+            assert len(results) == 2, "Actual results: {}".format(results)
+            assert all((r["a"] == 1 for r in results)), "Actual results: {}".format(
+                results
+            )
+            assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(
+                results
+            )
+
+            node0.properties["a"] = 2
+            edge0.properties["a"] = 2
+            graph.add_graph_documents([doc])
+
+            # Test value after first overwrite: a=2, b=1
+            results = graph.query(query, {"nodeId": node0.id})
+            assert len(results) == 2, "Actual results: {}".format(results)
+            assert all((r["a"] == 2 for r in results)), "Actual results: {}".format(
+                results
+            )
+            assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(
+                results
+            )
+
+            node0.properties = {}
+            edge0.properties = {}
+            graph.add_graph_documents([doc])
+
+            # Test value after second overwrite: a=2, b=1
+            results = graph.query(query, {"nodeId": node0.id})
+            assert len(results) == 2, "Actual results: {}".format(results)
+            assert all((r["a"] == 2 for r in results)), "Actual results: {}".format(
+                results
+            )
+            assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(
+                results
+            )
+        finally:
+            print("Clean up graph with name `{}`".format(graph_name))
+            graph.cleanup()
+            print("Actual results:", results)
