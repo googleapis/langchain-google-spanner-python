@@ -78,8 +78,6 @@ class SpannerGraphTextToGQLRetriever(BaseRetriever):
     ) -> "SpannerGraphTextToGQLRetriever":
         if llm is None:
             raise ValueError("`llm` cannot be none")
-        # if embedding_service is None:
-        #    raise ValueError("`embedding_service` cannot be none")
         selector = None
         if embedding_service is not None:
             selector = SemanticSimilarityExampleSelector.from_examples(
@@ -127,9 +125,6 @@ class SpannerGraphTextToGQLRetriever(BaseRetriever):
 
         if self.llm is None:
             raise ValueError("`llm` cannot be None")
-
-        # if self.selector is None:
-        # raise ValueError("`selector` cannot be None")
 
         gql_chain: RunnableSequence
         if self.selector is None:
