@@ -168,7 +168,7 @@ class SpannerGraphTextToGQLRetriever(BaseRetriever):
 class SpannerGraphVectorContextRetriever(BaseRetriever):
     """Retriever that does a vector search on nodes in a SpannerGraphStore.
     If expand_by_hops is provided , the nodes (and edges) at a distance upto
-    the expand_by hops will also be returned.
+    the expand_by_hops will also be returned.
     """
 
     graph_store: SpannerGraphStore = Field(exclude=True)
@@ -277,7 +277,11 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
             top_k=self.top_k,
         )
 
-        if self.expand_by_hops >= 0:
+        if self.expand_by_hops == 0:
+            gql_query += """
+          RETURN SAFE_TO_JSON(node) as path
+          """
+        elif self.expand_by_hops > 0:
             gql_query += """
           RETURN node
           NEXT
