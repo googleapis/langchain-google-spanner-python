@@ -185,6 +185,7 @@ Spanner Graph Retrievers Usage
 Use ``SpannerGraphTextToGQLRetriever`` to translate natural language question to GQL and query SpannerGraphStore.
 
 .. code:: python
+
     from langchain_google_spanner import SpannerGraphStore, SpannerGraphTextToGQLRetriever
     from langchain_google_vertexai import ChatVertexAI
 
