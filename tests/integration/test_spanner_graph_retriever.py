@@ -253,3 +253,21 @@ class TestRetriever:
         )
         assert len(response) == 4
         assert "Elias Thorne" in response[0].page_content
+
+    def test_spanner_graph_vector_node_retriever_0_hops(self, setup_db_load_data):
+        graph, suffix = setup_db_load_data
+        suffix = "_" + suffix
+        retriever = SpannerGraphVectorContextRetriever.from_params(
+            graph_store=graph,
+            embedding_service=get_embedding(),
+            label_expr="Person{}".format(suffix),
+            expand_by_hops=0,
+            embeddings_column="desc_embedding",
+            top_k=1,
+            k=10,
+        )
+        response = retriever.invoke(
+            "What do you know about the person who lives in desert?"
+        )
+        assert len(response) == 1
+        assert "Elias Thorne" in response[0].page_content

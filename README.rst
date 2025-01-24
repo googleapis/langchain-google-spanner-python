@@ -201,11 +201,11 @@ Use ``SpannerGraphTextToGQLRetriever`` to translate natural language question to
     )
     retriever.invoke("Where does Elias Thorne's sibling live?")
 
-Use ``SpannerGraphVectorContextRetriever`` to perform vector search on nodes in a SpannerGraphStore. If expand_by_hops is provided, the nodes and edges at a distance upto the expand_by_hops from the nodes found in the vector search will also be returned.
+Use ``SpannerGraphVectorContextRetriever`` to perform vector search on embeddings that are stored in the nodes in a SpannerGraphStore. If expand_by_hops is provided, the nodes and edges at a distance upto the expand_by_hops from the nodes found in the vector search will also be returned.
 
 .. code:: python
 
-    from langchain_google_spanner import SpannerGraphStore, SpannerGraphQAChain
+    from langchain_google_spanner import SpannerGraphStore, SpannerGraphVectorContextRetriever
     from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
 
 
@@ -224,6 +224,7 @@ Use ``SpannerGraphVectorContextRetriever`` to perform vector search on nodes in 
             expand_by_hops=1,
         )
     retriever.invoke("Who lives in desert?")
+
 
 Contributions
 ~~~~~~~~~~~~~

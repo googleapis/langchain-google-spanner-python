@@ -314,7 +314,7 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
 
         # 3. Transform the results into a list of Documents
         documents = []
-        if self.expand_by_hops >= 0:
+        if self.expand_by_hops > 0:
             for response in responses:
                 elements = json.loads((response["path"]).serialize())
                 for element in elements:
