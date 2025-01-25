@@ -89,8 +89,7 @@ class SpannerGraphTextToGQLRetriever(BaseRetriever):
             **kwargs,
         )
 
-    @staticmethod
-    def _duplicate_braces_in_string(text: str) -> str:
+    def __duplicate_braces_in_string(self, text: str) -> str:
         """Replaces single curly braces with double curly braces in a string.
 
         Args:
@@ -109,9 +108,7 @@ class SpannerGraphTextToGQLRetriever(BaseRetriever):
         self.selector.add_example(
             {
                 "input": question,
-                "query": SpannerGraphTextToGQLRetriever._duplicate_braces_in_string(
-                    gql
-                ),
+                "query": self.__duplicate_braces_in_string(gql),
             }
         )
 
@@ -153,7 +150,6 @@ class SpannerGraphTextToGQLRetriever(BaseRetriever):
                 }
             )
         )
-        print(gql_query)
 
         # 2. Execute the gql query against spanner graph
         responses = self.graph_store.query(gql_query)[: self.k]
@@ -189,7 +185,7 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
 
     @classmethod
     def from_params(
-        cls, embedding_service: Optional[Embeddings] = None, **kwargs: Any
+        cls, embedding_service: Embeddings, **kwargs: Any
     ) -> "SpannerGraphVectorContextRetriever":
         if embedding_service is None:
             raise ValueError("`embedding_service` cannot be None")
@@ -213,8 +209,7 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
                 "One and only one of `return_properties` or `expand_by_hops` must be provided."
             )
 
-    @staticmethod
-    def _clean_element(element: dict[str, Any], embedding_column: str) -> None:
+    def __clean_element(self, element: dict[str, Any], embedding_column: str) -> None:
         """Removes specified keys and embedding from properties in graph element.
 
         Args:
@@ -233,8 +228,9 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
         if "properties" in element and embedding_column in element["properties"]:
             del element["properties"][embedding_column]
 
-    @staticmethod
-    def _get_distance_function(distance_strategy=DistanceStrategy.EUCLIDEIAN) -> str:
+    def __get_distance_function(
+        self, distance_strategy=DistanceStrategy.EUCLIDEIAN
+    ) -> str:
         """Gets the vector distance function."""
         if distance_strategy == DistanceStrategy.COSINE:
             return "COSINE_DISTANCE"
@@ -255,7 +251,7 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
             raise ValueError("`embedding_service` cannot be None")
         query_embeddings = self.embedding_service.embed_query(question)
 
-        distance_fn = SpannerGraphVectorContextRetriever._get_distance_function(
+        distance_fn = self.__get_distance_function(
             self.query_parameters.distance_strategy
         )
 
@@ -307,8 +303,6 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
                 "Either `return_properties` or `expand_by_hops` must be provided."
             )
 
-        print(gql_query)
-
         # 2. Execute the gql query against spanner graph
         responses = self.graph_store.query(gql_query)[: self.k]
 
@@ -318,9 +312,7 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
             for response in responses:
                 elements = json.loads((response["path"]).serialize())
                 for element in elements:
-                    SpannerGraphVectorContextRetriever._clean_element(
-                        element, self.embeddings_column
-                    )
+                    self.__clean_element(element, self.embeddings_column)
                 response["path"] = elements
                 content = dumps(response["path"])
                 documents.append(Document(page_content=content, metadata={}))
