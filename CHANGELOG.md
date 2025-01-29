@@ -8,9 +8,9 @@
 * **graph:** Add Custom Retrievers for Spanner Graph RAG. ([#122](https://github.com/googleapis/langchain-google-spanner-python/issues/122)) ([bf2903a](https://github.com/googleapis/langchain-google-spanner-python/commit/bf2903a2a12910d97503a6032bf413ddafe256cf))
 
 
-### Documentation
+### ⚠ BREAKING CHANGES
 
-* A few minor fixes for the notebook of Graph QA chain ([215ee96](https://github.com/googleapis/langchain-google-spanner-python/commit/215ee96825c012237c9ab69ac3a4d33102b28f8b))
+* extract_gql, fix_gql_syntax are now in the graph_utils module([#122](https://github.com/googleapis/langchain-google-spanner-python/issues/122)) ([bf2903a](https://github.com/googleapis/langchain-google-spanner-python/commit/bf2903a2a12910d97503a6032bf413ddafe256cf))
 
 ## [0.6.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.5.0...v0.6.0) (2024-12-05)
 
