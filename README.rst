@@ -179,6 +179,53 @@ See the full `Spanner Graph QA Chain`_ tutorial.
 
 .. _`Spanner Graph QA Chain`: https://github.com/googleapis/langchain-google-spanner-python/blob/main/docs/graph_qa_chain.ipynb
 
+Spanner Graph Retrievers Usage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``SpannerGraphTextToGQLRetriever`` to translate natural language question to GQL and query SpannerGraphStore.
+
+.. code:: python
+
+    from langchain_google_spanner import SpannerGraphStore, SpannerGraphTextToGQLRetriever
+    from langchain_google_vertexai import ChatVertexAI
+
+
+    graph = SpannerGraphStore(
+        instance_id="my-instance",
+        database_id="my-database",
+        graph_name="my_graph",
+    )
+    llm = ChatVertexAI()
+    retriever = SpannerGraphTextToGQLRetriever.from_params(
+        graph_store=graph,
+        llm=llm
+    )
+    retriever.invoke("Where does Elias Thorne's sibling live?")
+
+Use ``SpannerGraphVectorContextRetriever`` to perform vector search on embeddings that are stored in the nodes in a SpannerGraphStore. If expand_by_hops is provided, the nodes and edges at a distance upto the expand_by_hops from the nodes found in the vector search will also be returned.
+
+.. code:: python
+
+    from langchain_google_spanner import SpannerGraphStore, SpannerGraphVectorContextRetriever
+    from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
+
+
+    graph = SpannerGraphStore(
+        instance_id="my-instance",
+        database_id="my-database",
+        graph_name="my_graph",
+    )
+    embedding_service = VertexAIEmbeddings(model_name="text-embedding-004")
+    retriever = SpannerGraphVectorContextRetriever.from_params(
+            graph_store=graph,
+            embedding_service=embedding_service,
+            label_expr="Person",
+            embeddings_column="embeddings",
+            top_k=1,
+            expand_by_hops=1,
+        )
+    retriever.invoke("Who lives in desert?")
+
 
 Contributions
 ~~~~~~~~~~~~~
