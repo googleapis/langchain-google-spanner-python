@@ -117,7 +117,7 @@ class VectorSearchIndex(SecondaryIndex):
         num_leaves: int,
         num_branches: int,
         tree_depth: int,
-        index_type: DistanceStrategy,
+        distance_type: DistanceStrategy,
         nullable_column: bool = False,
         *args,
         **kwargs,
@@ -126,7 +126,7 @@ class VectorSearchIndex(SecondaryIndex):
         self.num_leaves = num_leaves
         self.num_branches = num_branches
         self.tree_depth = tree_depth
-        self.index_type = index_type
+        self.distance_type = distance_type
         self.nullable_column = nullable_column
 
     def __post_init__(self):
@@ -610,7 +610,7 @@ class SpannerVectorStore(VectorStore):
             statement = f"CREATE VECTOR INDEX IF NOT EXISTS {secondary_index.index_name}\n\tON {table_name}({column_name})"
             if getattr(secondary_index, "nullable_column", False):
                 statement += f"\n\tWHERE {column_name} IS NOT NULL"
-            options_segments = [f"distance_type='{secondary_index.index_type}'"]
+            options_segments = [f"distance_type='{secondary_index.distance_type}'"]
             if getattr(secondary_index, "tree_depth", 0) > 0:
                 tree_depth = secondary_index.tree_depth
                 if tree_depth not in (2, 3):
@@ -1061,8 +1061,8 @@ class SpannerVectorStore(VectorStore):
             self._embedding_column,
             embedding or self._embedding_service,
             num_leaves,
-            strategy,
             limit,
+            strategy,
             is_embedding_nullable,
             where_condition,
             embedding_column_is_nullable=embedding_column_is_nullable,
@@ -1084,8 +1084,8 @@ class SpannerVectorStore(VectorStore):
         embedding_column_name: str,
         embedding: List[float],
         num_leaves: int,
+        limit: int,
         strategy: DistanceStrategy = DistanceStrategy.COSINE,
-        k: int = None,
         is_embedding_nullable: bool = False,
         where_condition: str = None,
         embedding_column_is_nullable: bool = False,
@@ -1144,8 +1144,8 @@ class SpannerVectorStore(VectorStore):
         if where_condition:
             sql += " WHERE " + where_condition + "\n"
 
-        if k:
-            sql += f"LIMIT {k}"
+        if limit:
+            sql += f"LIMIT {limit}"
 
         return sql.strip()
 

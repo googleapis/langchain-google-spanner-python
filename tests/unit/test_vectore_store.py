@@ -109,14 +109,14 @@ class TestSpannerVectorStore(unittest.TestCase):
                             nullable_column=nullable,
                             num_branches=1000,
                             tree_depth=3,
-                            index_type=distance_strategy,
+                            distance_type=distance_strategy,
                             num_leaves=100000,
                         )
                     ],
                 )
 
                 want = [
-                    "CREATE VECTOR INDEX DocEmbeddingIndex\n"
+                    "CREATE VECTOR INDEX IF NOT EXISTS DocEmbeddingIndex\n"
                     + "  ON Documents(DocEmbedding)\n"
                     + "  WHERE DocEmbedding IS NOT NULL\n"
                     + f"  OPTIONS(distance_type='{distance_strategy}', "
@@ -124,7 +124,7 @@ class TestSpannerVectorStore(unittest.TestCase):
                 ]
                 if not nullable:
                     want = [
-                        "CREATE VECTOR INDEX DocEmbeddingIndex\n"
+                        "CREATE VECTOR INDEX IF NOT EXISTS DocEmbeddingIndex\n"
                         + "  ON Documents(DocEmbedding)\n"
                         + f"  OPTIONS(distance_type='{distance_strategy}', "
                         + "tree_depth=3, num_branches=1000, num_leaves=100000)"
@@ -152,7 +152,7 @@ class TestSpannerVectorStore(unittest.TestCase):
                             columns=["DocEmbedding"],
                             num_branches=1000,
                             tree_depth=3,
-                            index_type=strategy,
+                            distance_type=strategy,
                             num_leaves=100000,
                         )
                     ],
@@ -209,8 +209,8 @@ class TestSpannerVectorStore(unittest.TestCase):
             "DocEmbedding",
             [1.0, 2.0, 3.0],
             10,
+            100,
             DistanceStrategy.COSINE,
-            limit=100,
             return_columns=["DocId"],
         )
 
@@ -218,7 +218,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10})\n'
+            + '\'{"num_leaves_to_search": 10}\')\n'
             + "LIMIT 100"
         )
 
@@ -231,8 +231,8 @@ class TestSpannerVectorStore(unittest.TestCase):
             "DocEmbedding",
             [1.0, 2.0, 3.0],
             10,
+            100,
             DistanceStrategy.COSINE,
-            limit=100,
             embedding_column_is_nullable=True,
             return_columns=["DocId"],
         )
@@ -242,7 +242,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             + "WHERE DocEmbedding IS NOT NULL\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10})\n'
+            + '\'{"num_leaves_to_search": 10}\')\n'
             + "LIMIT 100"
         )
 
@@ -255,8 +255,8 @@ class TestSpannerVectorStore(unittest.TestCase):
             "DocEmbedding",
             [1.0, 2.0, 3.0],
             10,
+            100,
             DistanceStrategy.COSINE,
-            limit=100,
             embedding_column_is_nullable=True,
         )
 
@@ -265,7 +265,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             + "WHERE DocEmbedding IS NOT NULL\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10})\n'
+            + '\'{"num_leaves_to_search": 10}\')\n'
             + "LIMIT 100"
         )
 
@@ -278,8 +278,8 @@ class TestSpannerVectorStore(unittest.TestCase):
             "DocEmbedding",
             [1.0, 2.0, 3.0],
             10,
+            100,
             DistanceStrategy.COSINE,
-            limit=100,
             return_columns=["DocId"],
             ascending=False,
         )
@@ -288,7 +288,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10}) DESC\n'
+            + '\'{"num_leaves_to_search": 10}\') DESC\n'
             + "LIMIT 100"
         )
 
@@ -301,6 +301,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             "DocEmbedding",
             [1.0, 2.0, 3.0],
             10,
+            100,
             DistanceStrategy.COSINE,
             return_columns=["DocId"],
         )
@@ -309,7 +310,8 @@ class TestSpannerVectorStore(unittest.TestCase):
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10})'
+            + '\'{"num_leaves_to_search": 10}\')\n'
+            + "LIMIT 100"
         )
 
         assert got == want
