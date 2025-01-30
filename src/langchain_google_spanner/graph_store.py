@@ -79,11 +79,11 @@ def partition_graph_docs(
 ) -> Tuple[dict, dict]:
     """Returns nodes and edges grouped by the type.
 
-    Parameters:
-    - graph_documents: List[GraphDocument]
+    Args:
+      graph_documents: List[GraphDocument].
 
     Returns:
-    - A tuple of two dictionaries. The first is nodes grouped by node types,
+      A tuple of two dictionaries. The first is nodes grouped by node types,
       the second is edges grouped by edge types.
     """
     nodes: CaseInsensitiveDict[dict[NodeWrapper, Node]] = CaseInsensitiveDict()
@@ -131,10 +131,10 @@ class GraphDocumentUtility:
 
     @staticmethod
     def fixup_graph_documents(graph_documents: List[GraphDocument]) -> None:
-        """Preprocess graph documents
+        """Preprocess graph documents.
 
-        Parameters:
-        - graph_documents: List[GraphDocument]
+        Args:
+          graph_documents: List[GraphDocument].
         """
         for graph_document in graph_documents:
             for node in graph_document.nodes:
@@ -144,10 +144,10 @@ class GraphDocumentUtility:
 
     @staticmethod
     def fixup_element(element: Union[Node, Relationship]) -> None:
-        """Preprocess graph element
+        """Preprocess graph element.
 
-        Parameters:
-        - element: Node or Relationship
+        Args:
+          element: Node or Relationship.
         """
         element.type = GraphDocumentUtility.fixup_identifier(element.type)
         should_ignore = lambda v: v is None or (isinstance(v, list) and len(v) == 0)
@@ -250,17 +250,20 @@ class ElementSchema(object):
 
     @staticmethod
     def from_static_nodes(
-        name: str, graph_name: str, nodes: List[Node]
+        name: str, nodes: List[Node], graph_schema: SpannerGraphSchema
     ) -> ElementSchema:
         """Builds ElementSchema from a list of nodes.
 
-        Parameters:
-        - name: name of the schema;
-        - graph_name: name of the graph;
-        - nodes: a non-empty list of nodes.
+        Args:
+          name: name of the schema.
+          nodes: a non-empty list of nodes.
+          graph_schema: schema of the graph.
 
         Returns:
-        - ElementSchema: schema representation of the nodes.
+          ElementSchema: schema representation of the nodes.
+
+        Raises:
+          ValueError: An error occured building element schema.
         """
         if len(nodes) == 0:
             raise ValueError("The list of nodes should not be empty")
@@ -280,7 +283,9 @@ class ElementSchema(object):
         types[ElementSchema.NODE_KEY_COLUMN_NAME] = TypeUtility.value_to_param_type(
             nodes[0].id
         )
-        return ElementSchema.make_node_schema(name, name, graph_name, types)
+        return ElementSchema.make_node_schema(
+            name, name, graph_schema.graph_name, types
+        )
 
     @staticmethod
     def from_dynamic_nodes(
@@ -288,13 +293,16 @@ class ElementSchema(object):
     ) -> ElementSchema:
         """Builds ElementSchema from a list of nodes.
 
-        Parameters:
-        - name: name of the schema;
-        - graph_name: name of the graph;
-        - nodes: a non-empty list of nodes.
+        Args:
+          name: name of the schema;
+          nodes: a non-empty list of nodes.
+          graph_schema: schema of the graph;
 
         Returns:
-        - ElementSchema: schema representation of the nodes.
+          ElementSchema: schema representation of the nodes.
+
+        Raises:
+          ValueError: An error occured building element schema.
         """
         if len(nodes) == 0:
             raise ValueError("The list of nodes should not be empty")
@@ -325,19 +333,21 @@ class ElementSchema(object):
     @staticmethod
     def from_static_edges(
         name: str,
-        graph_name: str,
         edges: List[Relationship],
         graph_schema: SpannerGraphSchema,
     ) -> ElementSchema:
         """Builds ElementSchema from a list of edges.
 
-        Parameters:
-        - name: name of the schema;
-        - graph_name: name of the graph;
-        - nodes: a non-empty list of edges.
+        Args:
+          name: name of the schema;
+          edges: a non-empty list of edges.
+          graph_schema: schema of the graph;
 
         Returns:
-        - ElementSchema: schema representation of the edges.
+          ElementSchema: schema representation of the edges.
+
+        Raises:
+          ValueError: An error occured building element schema.
         """
         if len(edges) == 0:
             raise ValueError("The list of edges should not be empty")
@@ -386,13 +396,16 @@ class ElementSchema(object):
     ) -> ElementSchema:
         """Builds ElementSchema from a list of edges.
 
-        Parameters:
-        - name: name of the schema;
-        - graph_name: name of the graph;
-        - edges: a non-empty list of edges.
+        Args:
+          name: name of the schema.
+          edges: a non-empty list of edges.
+          graph_schema: schema of the graph.
 
         Returns:
-        - ElementSchema: schema representation of the edges.
+          ElementSchema: schema representation of the edges.
+
+        Raises:
+          ValueError: An error occured building element schema.
         """
         if len(edges) == 0:
             raise ValueError("The list of edges should not be empty")
@@ -438,14 +451,18 @@ class ElementSchema(object):
     ) -> Generator[Tuple[str, Tuple[str], List[List[Any]]], None, None]:
         """Builds the data required to add a list of nodes to Spanner.
 
-        Parameters:
-          - name: type of name;
-          - nodes: a list of Nodes.
+        Args:
+          name: type of name;
+          nodes: a list of Nodes.
 
-        Returns an iterator that yields a tuple consists of the following:
-          - str: a table name;
-          - List[str]: a list of column names;
-          - List[List[Any]]: a list of rows.
+        Returns:
+          An iterator that yields a tuple consists of the following:
+            str: a table name;
+            List[str]: a list of column names;
+            List[List[Any]]: a list of rows.
+
+        Raises:
+          ValueError: An error occured adding nodes.
         """
         if len(nodes) == 0:
             raise ValueError("Empty list of nodes")
@@ -483,14 +500,18 @@ class ElementSchema(object):
     ) -> Generator[Tuple[str, Tuple[str], List[List[Any]]], None, None]:
         """Builds the data required to add a list of edges to Spanner.
 
-        Parameters:
-          - name: type of edge;
-          - edges: a list of Relationships.
+        Args:
+          name: type of edge;
+          edges: a list of Relationships.
 
-        Returns an iterator that yields a tuple consists of the following:
-          - str: a table name;
-          - List[str]: a list of column names;
-          - List[List[Any]]: a list of rows.
+        Returns:
+          An iterator that yields a tuple consists of the following:
+            str: a table name;
+            List[str]: a list of column names;
+            List[List[Any]]: a list of rows.
+
+        Raises:
+          ValueError: An error occured adding edges.
         """
         if len(edges) == 0:
             raise ValueError("Empty list of edges")
@@ -531,13 +552,16 @@ class ElementSchema(object):
     ) -> ElementSchema:
         """Builds ElementSchema from information schema represenation of an element.
 
-        Parameters:
-        - element_schema: the information schema represenation of an element;
-        - property_decls: the information schema represenation of property
-          declarations.
+        Args:
+          element_schema: the information schema represenation of an element;
+          property_decls: the information schema represenation of property
+            declarations.
 
         Returns:
-        - ElementSchema
+          ElementSchema
+
+        Raises:
+          ValueError: An error occured building graph schema.
         """
         element = ElementSchema()
         element.name = element_schema["name"]
@@ -579,9 +603,14 @@ class ElementSchema(object):
     def to_ddl(self, graph_schema: SpannerGraphSchema) -> str:
         """Returns a CREATE TABLE ddl that represents the element schema.
 
+        Args:
+          graph_schema: Spanner Graph schema.
+
         Returns:
-        - str: a string of CREATE TABLE ddl statement.
-        - graph_schema: Spanner Graph schema.
+          str: a string of CREATE TABLE ddl statement.
+
+        Raises:
+          ValueError: An error occured building graph ddl.
         """
 
         to_identifier = GraphDocumentUtility.to_identifier
@@ -631,11 +660,14 @@ class ElementSchema(object):
     def evolve(self, new_schema: ElementSchema) -> List[str]:
         """Evolves current schema from the new schema.
 
-        Parameters:
-        - new_schema: an ElementSchema representing new nodes/edges.
+        Args:
+          new_schema: an ElementSchema representing new nodes/edges.
 
         Returns:
-        - List[str]: a list of DDL statements.
+          List[str]: a list of DDL statements.
+
+        Raises:
+          ValueError: An error occured evolving graph schema.
         """
         if self.kind != new_schema.kind:
             raise ValueError(
@@ -725,14 +757,14 @@ class SpannerGraphSchema(object):
     ):
         """Initializes the graph schema.
 
-        Parameters:
-        - graph_name: the name of the graph;
-        - use_flexible_schema: whether to use the flexible schema which uses a
-          JSON blob to store node and edge properties;
-        - static_node_properties: in flexible schema, treat these node
-          properties as static;
-        - static_edge_properties: in flexible schema, treat these edge
-          properties as static.
+        Args:
+          graph_name: the name of the graph;
+          use_flexible_schema: whether to use the flexible schema which uses a
+            JSON blob to store node and edge properties;
+          static_node_properties: in flexible schema, treat these node
+            properties as static;
+          static_edge_properties: in flexible schema, treat these edge
+            properties as static.
         """
         self.graph_name: str = graph_name
         self.nodes: CaseInsensitiveDict[ElementSchema] = CaseInsensitiveDict({})
@@ -748,18 +780,18 @@ class SpannerGraphSchema(object):
     def evolve(self, graph_documents: List[GraphDocument]) -> List[str]:
         """Evolves current schema into a schema representing the input documents.
 
-        Parameters:
-        - graph_documents: a list of GraphDocument.
+        Args:
+          graph_documents: a list of GraphDocument.
 
         Returns:
-        - List[str]: a list of DDL statements.
+          List[str]: a list of DDL statements.
         """
         nodes, edges = partition_graph_docs(graph_documents)
 
         ddls = []
         for k, ns in nodes.items():
             node_schema = (
-                ElementSchema.from_static_nodes(k, self.graph_name, ns)
+                ElementSchema.from_static_nodes(k, ns, self)
                 if not self.use_flexible_schema
                 else ElementSchema.from_dynamic_nodes(k, ns, self)
             )
@@ -768,7 +800,7 @@ class SpannerGraphSchema(object):
 
         for k, es in edges.items():
             edge_schema = (
-                ElementSchema.from_static_edges(k, self.graph_name, es, self)
+                ElementSchema.from_static_edges(k, es, self)
                 if not self.use_flexible_schema
                 else ElementSchema.from_dynamic_edges(k, es, self)
             )
@@ -782,8 +814,8 @@ class SpannerGraphSchema(object):
     def from_information_schema(self, info_schema: Dict[str, Any]) -> None:
         """Builds the schema from information schema represenation.
 
-        Parameters:
-        - info_schema: the information schema represenation of a graph;
+        Args:
+          info_schema: the information schema represenation of a graph;
         """
         property_decls = info_schema.get("propertyDeclarations", [])
         for node in info_schema["nodeTables"]:
@@ -799,44 +831,44 @@ class SpannerGraphSchema(object):
     def get_node_schema(self, name: str) -> Optional[ElementSchema]:
         """Gets the node schema by name.
 
-        Parameters:
-        - name: the node schema name.
+        Args:
+          name: the node schema name.
 
         Returns:
-        - Optional[ElementSchema]: returns None if there is no such node schema.
+          Optional[ElementSchema]: returns None if there is no such node schema.
         """
         return self.nodes.get(name, None)
 
     def get_edge_schema(self, name: str) -> Optional[ElementSchema]:
         """Gets the edge schema by name.
 
-        Parameters:
-        - name: the edge schema name.
+        Args:
+          name: the edge schema name.
 
         Returns:
-        - Optional[ElementSchema]: returns None if there is no such edge schema.
+          Optional[ElementSchema]: returns None if there is no such edge schema.
         """
         return self.edges.get(name, None)
 
     def get_property_type(self, name: str) -> Optional[param_types.Type]:
         """Gets the property type by name.
 
-        Parameters:
-        - name: the property name.
+        Args:
+          name: the property name.
 
         Returns:
-        - Optional[param_types.Type]: returns None if there is no such property.
+          Optional[param_types.Type]: returns None if there is no such property.
         """
         return self.properties.get(name, None)
 
     def get_properties_as_struct_type(self, properties: List[str]) -> param_types.Type:
         """Gets the struct type with properties as fields.
 
-        Parameters:
-        - properties: a list of property names.
+        Args:
+          properties: a list of property names.
 
         Returns:
-        - param_types.Struct: a struct type with properties as fields.
+          param_types.Struct: a struct type with properties as fields.
         """
         struct_fields = []
         for p in properties:
@@ -852,7 +884,7 @@ class SpannerGraphSchema(object):
         """Builds a string representation of the graph schema.
 
         Returns:
-        - str: a string representation of the graph schema.
+          str: a string representation of the graph schema.
         """
         properties = {
             k: TypeUtility.spanner_type_to_schema_str(v)
@@ -901,7 +933,7 @@ class SpannerGraphSchema(object):
         """Returns a CREATE PROPERTY GRAPH ddl that represents the graph schema.
 
         Returns:
-        - str: a string of CREATE PROPERTY GRAPH ddl statement.
+          str: a string of CREATE PROPERTY GRAPH ddl statement.
         """
         to_identifier = GraphDocumentUtility.to_identifier
         to_identifiers = GraphDocumentUtility.to_identifiers
@@ -994,11 +1026,11 @@ class SpannerGraphSchema(object):
     def _update_node_schema(self, node_schema: ElementSchema) -> List[str]:
         """Evolves node schema.
 
-        Parameters:
-        - node_schema: a node ElementSchema.
+        Args:
+          node_schema: a node ElementSchema.
 
         Returns:
-        - List[str]: a list of DDL statements that requires to evolve the schema.
+          List[str]: a list of DDL statements that requires to evolve the schema.
         """
 
         old_schema = self.node_tables.get(node_schema.name, None)
@@ -1014,11 +1046,11 @@ class SpannerGraphSchema(object):
     def _update_edge_schema(self, edge_schema: ElementSchema) -> List[str]:
         """Evolves edge schema.
 
-        Parameters:
-        - edge_schema: an edge ElementSchema.
+        Args:
+          edge_schema: an edge ElementSchema.
 
         Returns:
-        - List[str]: a list of DDL statements that requires to evolve the schema.
+          List[str]: a list of DDL statements that requires to evolve the schema.
         """
         if edge_schema.base_table_name not in self.edge_tables:
             ddls = [edge_schema.to_ddl(self)]
@@ -1034,8 +1066,8 @@ class SpannerGraphSchema(object):
     def _update_labels_and_properties(self, element_schema: ElementSchema) -> None:
         """Updates labels and properties based on an element schema.
 
-        Parameters:
-        - element_schema: an ElementSchema.
+        Args:
+          element_schema: an ElementSchema.
         """
         for l in element_schema.labels:
             if l in self.labels:
@@ -1050,14 +1082,15 @@ class SpannerGraphSchema(object):
     ) -> Generator[Tuple[str, Tuple[str], List[List[Any]]], None, None]:
         """Builds the data required to add a list of nodes to Spanner.
 
-        Parameters:
-          - name: type of name;
-          - nodes: a list of Nodes.
+        Args:
+          name: type of name;
+          nodes: a list of Nodes.
 
-        Returns an iterator that yields a tuple consists of the following:
-          - str: a table name;
-          - List[str]: a list of column names;
-          - List[List[Any]]: a list of rows.
+        Returns:
+          An iterator that yields a tuple consists of the following:
+            str: a table name;
+            List[str]: a list of column names;
+            List[List[Any]]: a list of rows.
         """
         node_schema = self.get_node_schema(name)
         if node_schema is None:
@@ -1070,14 +1103,15 @@ class SpannerGraphSchema(object):
     ) -> Generator[Tuple[str, Tuple[str], List[List[Any]]], None, None]:
         """Builds the data required to add a list of edges to Spanner.
 
-        Parameters:
-          - name: type of edge;
-          - edges: a list of Relationships.
+        Args:
+          name: type of edge;
+          edges: a list of Relationships.
 
-        Returns an iterator that yields a tuple consists of the following:
-          - str: a table name;
-          - List[str]: a list of column names;
-          - List[List[Any]]: a list of rows.
+        Returns:
+          An iterator that yields a tuple consists of the following:
+            str: a table name;
+            List[str]: a list of column names;
+            List[List[Any]]: a list of rows.
         """
         edge_schema = self.get_edge_schema(name)
         if edge_schema is None:
@@ -1086,8 +1120,48 @@ class SpannerGraphSchema(object):
             yield v
 
 
-class SpannerImpl(object):
+class SpannerInterface(object):
     """Wrapper of Spanner APIs."""
+
+    @abstractmethod
+    def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
+        """Runs a Spanner query.
+
+        Args:
+          query: query string;
+          params: Spanner query params;
+          param_types: Spanner param types.
+
+        Returns:
+          List[Dict[str, Any]]: query results.
+        """
+        pass
+
+    @abstractmethod
+    def apply_ddls(self, ddls: List[str], options: Dict[str, Any] = {}) -> None:
+        """Applies a list of schema modifications.
+
+        Args:
+          ddls: Spanner Schema DDLs.
+        """
+        pass
+
+    @abstractmethod
+    def insert_or_update(
+        self, table: str, columns: Tuple[str], values: List[List[Any]]
+    ) -> None:
+        """Insert or update the table.
+
+        Args:
+          table: Spanner table name;
+          columns: a tuple of column names;
+          values: list of values.
+        """
+        pass
+
+
+class SpannerImpl(SpannerInterface):
+    """Implementation of SpannerInterface."""
 
     def __init__(
         self,
@@ -1097,27 +1171,16 @@ class SpannerImpl(object):
     ):
         """Initializes the Spanner implementation.
 
-        Parameters:
-        - instance_id: Google Cloud Spanner instance id;
-        - database_id: Google Cloud Spanner database id;
-        - client: an optional instance of Spanner client.
+        Args:
+          instance_id: Google Cloud Spanner instance id;
+          database_id: Google Cloud Spanner database id;
+          client: an optional instance of Spanner client.
         """
         self.client = client or spanner.Client()
         self.instance = self.client.instance(instance_id)
         self.database = self.instance.database(database_id)
 
     def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
-        """Runs a Spanner query.
-
-        Parameters:
-        - query: query string;
-        - params: Spanner query params;
-        - param_types: Spanner param types.
-
-        Returns:
-        - List[Dict[str, Any]]: query results.
-        """
-
         param_types = {k: TypeUtility.value_to_param_type(v) for k, v in params.items()}
         with self.database.snapshot() as snapshot:
             rows = snapshot.execute_sql(query, params=params, param_types=param_types)
@@ -1132,11 +1195,6 @@ class SpannerImpl(object):
             ]
 
     def apply_ddls(self, ddls: List[str], options: Dict[str, Any] = {}) -> None:
-        """Applies a list of schema modifications.
-
-        Parameters:
-        - ddls: Spanner Schema DDLs.
-        """
         if not ddls:
             return
 
@@ -1147,14 +1205,6 @@ class SpannerImpl(object):
     def insert_or_update(
         self, table: str, columns: Tuple[str], values: List[List[Any]]
     ) -> None:
-        """Insert or update the table.
-
-        Parameters:
-        - table: Spanner table name;
-        - columns: a tuple of column names;
-        - values: list of values.
-        """
-
         for i in range(0, len(values), MUTATION_BATCH_SIZE):
             value_batch = values[i : i + MUTATION_BATCH_SIZE]
             with self.database.batch() as batch:
@@ -1173,21 +1223,23 @@ class SpannerGraphStore(GraphStore):
         use_flexible_schema: bool = False,
         static_node_properties: List[str] = [],
         static_edge_properties: List[str] = [],
+        impl: Optional[SpannerInterface] = None,
     ):
-        """Parameters:
+        """Initializes SpannerGraphStore.
 
-        - instance_id: Google Cloud Spanner instance id;
-        - database_id: Google Cloud Spanner database id;
-        - graph_name: Graph name;
-        - client: an optional instance of Spanner client.
-        - use_flexible_schema: whether to use the flexible schema which uses a
+        Args:
+          instance_id: Google Cloud Spanner instance id;
+          database_id: Google Cloud Spanner database id;
+          graph_name: Graph name;
+          client: an optional instance of Spanner client.
+          use_flexible_schema: whether to use the flexible schema which uses a
           JSON blob to store node and edge properties;
-        - static_node_properties: in flexible schema, treat these node
+          static_node_properties: in flexible schema, treat these node
           properties as static;
-        - static_edge_properties: in flexible schema, treat these edge
+          static_edge_properties: in flexible schema, treat these edge
           properties as static.
         """
-        self.impl = SpannerImpl(instance_id, database_id, client)
+        self.impl = impl or SpannerImpl(instance_id, database_id, client)
         self.schema = SpannerGraphSchema(
             graph_name,
             use_flexible_schema,
@@ -1205,10 +1257,10 @@ class SpannerGraphStore(GraphStore):
     ) -> None:
         """Constructs nodes and relationships in the graph based on the provided docs.
 
-        Parameters:
-        - graph_documents (List[GraphDocument]): A list of GraphDocument objects
-        that contain the nodes and relationships to be added to the graph. Each
-        GraphDocument should encapsulate the structure of part of the graph,
+        Args:
+          graph_documents (List[GraphDocument]): A list of GraphDocument objects
+            that contain the nodes and relationships to be added to the graph. Each
+            GraphDocument should encapsulate the structure of part of the graph,
         """
         if include_source:
             raise NotImplementedError("include_source is not supported yet")
@@ -1242,13 +1294,13 @@ class SpannerGraphStore(GraphStore):
     def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
         """Query Spanner database.
 
-        Parameters:
-            query (str): The query to execute.
-            params (dict): The parameters to pass to the query.
+        Args:
+          query (str): The query to execute.
+          params (dict): The parameters to pass to the query.
 
         Returns:
-            List[Dict[str, Any]]: The list of dictionaries containing the query
-            results.
+          List[Dict[str, Any]]: The list of dictionaries containing the query
+          results.
         """
         return self.impl.query(query, params)
 
