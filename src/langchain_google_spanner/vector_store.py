@@ -1053,7 +1053,6 @@ class SpannerVectorStore(VectorStore):
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
         return_columns: List[str] = None,
-        strategy: DistanceStrategy = DistanceStrategy.COSINE,
     ) -> List[Any]:
         sql = SpannerVectorStore._query_ANN(
             self._table_name,
@@ -1062,7 +1061,7 @@ class SpannerVectorStore(VectorStore):
             embedding or self._embedding_service,
             num_leaves,
             limit,
-            strategy,
+            self._query_parameters.distance_strategy,
             is_embedding_nullable,
             where_condition,
             embedding_column_is_nullable=embedding_column_is_nullable,

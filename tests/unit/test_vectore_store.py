@@ -218,7 +218,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10}\')\n'
+            + "'{\"num_leaves_to_search\": 10}')\n"
             + "LIMIT 100"
         )
 
@@ -242,7 +242,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             + "WHERE DocEmbedding IS NOT NULL\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10}\')\n'
+            + "'{\"num_leaves_to_search\": 10}')\n"
             + "LIMIT 100"
         )
 
@@ -265,7 +265,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             + "WHERE DocEmbedding IS NOT NULL\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10}\')\n'
+            + "'{\"num_leaves_to_search\": 10}')\n"
             + "LIMIT 100"
         )
 
@@ -288,7 +288,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10}\') DESC\n'
+            + "'{\"num_leaves_to_search\": 10}') DESC\n"
             + "LIMIT 100"
         )
 
@@ -310,7 +310,7 @@ class TestSpannerVectorStore(unittest.TestCase):
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + '\'{"num_leaves_to_search": 10}\')\n'
+            + "'{\"num_leaves_to_search\": 10}')\n"
             + "LIMIT 100"
         )
 
