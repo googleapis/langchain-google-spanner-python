@@ -18,9 +18,8 @@ from __future__ import absolute_import
 
 import os
 import pathlib
-from pathlib import Path
 import shutil
-from typing import List, Optional
+from pathlib import Path
 
 import nox
 
@@ -161,7 +160,6 @@ def format(session):
     # Sort imports in strict alphabetical order.
     session.run(
         "isort",
-        "--fss",
         *LINT_PATHS,
     )
     session.run(

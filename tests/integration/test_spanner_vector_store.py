@@ -16,10 +16,10 @@ import datetime
 import os
 import uuid
 
+import pytest
 from google.cloud.spanner import Client  # type: ignore
 from langchain_community.document_loaders import HNLoader
 from langchain_community.embeddings import FakeEmbeddings
-import pytest
 
 from langchain_google_spanner.vector_store import (  # type: ignore
     DistanceStrategy,

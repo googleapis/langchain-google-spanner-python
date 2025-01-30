@@ -14,9 +14,9 @@
 
 from __future__ import annotations
 
-from abc import abstractmethod
 import re
 import string
+from abc import abstractmethod
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
 from google.cloud import spanner

@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
 import datetime
 import json
+from dataclasses import dataclass
 from typing import Any, Dict, Iterator, List, Optional, Union
 
 from google.cloud.spanner import Client, KeySet  # type: ignore
