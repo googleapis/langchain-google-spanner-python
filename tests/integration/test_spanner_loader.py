@@ -16,7 +16,7 @@ import os
 import uuid
 
 import pytest
-from google.cloud.spanner import Client, KeySet  # type: ignore
+from google.cloud.spanner import Client  # type: ignore
 from langchain_core.documents import Document
 
 from langchain_google_spanner.loader import Column, SpannerDocumentSaver, SpannerLoader
@@ -363,7 +363,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
                 client=client,
                 format="NOT_A_FORMAT",
             )
-            docs = loader.load()
+            docs = loader.load()  # noqa
 
     def test_loader_custom_content_key_error(self, client):
         query = f"SELECT * FROM {table_name}"
@@ -375,7 +375,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
                 client=client,
                 content_columns=["NOT_A_COLUMN"],
             )
-            docs = loader.load()
+            docs = loader.load()  # noqa
 
     def test_loader_custom_metadata_key_error(self, client):
         query = f"SELECT * FROM {table_name}"
@@ -387,7 +387,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
                 client=client,
                 metadata_columns=["NOT_A_COLUMN"],
             )
-            docs = loader.load()
+            docs = loader.load()  # noqa
 
     def test_loader_custom_json_metadata(self, client):
         database = client.instance(instance_id).database(google_database)
@@ -792,7 +792,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
                 client=client,
                 content_columns=["NOT_A_COLUMN"],
             )
-            docs = loader.load()
+            docs = loader.load()  # noqa
 
     def test_loader_custom_metadata_key_error(self, client):
         query = f"SELECT * FROM {table_name}"
@@ -804,7 +804,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
                 client=client,
                 metadata_columns=["NOT_A_COLUMN"],
             )
-            docs = loader.load()
+            docs = loader.load()  # noqa
 
     def test_loader_custom_json_metadata(self, client):
         database = client.instance(instance_id).database(pg_database)
