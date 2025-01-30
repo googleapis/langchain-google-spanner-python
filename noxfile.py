@@ -24,7 +24,7 @@ import nox
 
 DEFAULT_PYTHON_VERSION = "3.10"
 CURRENT_DIRECTORY = pathlib.Path(__file__).parent.absolute()
-LINT_PATHS = ["src", "tests", "noxfile.py"]
+LINT_PATHS = ["samples", "src", "tests", "noxfile.py"]
 
 
 nox.options.sessions = [
@@ -41,7 +41,7 @@ nox.options.sessions = [
 nox.options.error_on_missing_interpreters = True
 
 
-@nox.session(python="3.10")
+@nox.session(python=DEFAULT_PYTHON_VERSION)
 def docs(session):
     """Build the docs for this library."""
 
@@ -76,7 +76,7 @@ def docs(session):
     )
 
 
-@nox.session(python="3.10")
+@nox.session(python=DEFAULT_PYTHON_VERSION)
 def docfx(session):
     """Build the docfx yaml files for this library."""
 

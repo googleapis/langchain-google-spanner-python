@@ -14,12 +14,13 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import datetime
-from enum import Enum
 import logging
+from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
 
+import numpy as np
 from google.cloud import spanner  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 from google.cloud.spanner_v1 import JsonObject, param_types
@@ -27,7 +28,6 @@ from langchain_community.vectorstores.utils import maximal_marginal_relevance
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
-import numpy as np
 
 from .version import __version__
 
@@ -464,9 +464,7 @@ class SpannerVectorStore(VectorStore):
         ]
 
         ann_indices = list(
-            filter(
-                lambda index: type(index) is VectorSearchIndex, secondary_indexes
-            )
+            filter(lambda index: type(index) is VectorSearchIndex, secondary_indexes)
         )
         ddl_statements += SpannerVectorStore._generate_secondary_indices_ddl_ANN(
             table_name,
@@ -474,9 +472,9 @@ class SpannerVectorStore(VectorStore):
             secondary_indexes=list(ann_indices),
         )
 
-        knn_indices = list(filter(
-            lambda index: type(index) is SecondaryIndex, secondary_indexes
-        ))
+        knn_indices = list(
+            filter(lambda index: type(index) is SecondaryIndex, secondary_indexes)
+        )
         ddl_statements += SpannerVectorStore._generate_secondary_indices_ddl_KNN(
             table_name,
             embedding_column,
@@ -644,7 +642,7 @@ class SpannerVectorStore(VectorStore):
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
         query_parameters: QueryParameters = QueryParameters(),
-        skip_not_nullable_columns = False,
+        skip_not_nullable_columns=False,
     ):
         """
         Initialize the SpannerVectorStore.
@@ -791,8 +789,8 @@ class SpannerVectorStore(VectorStore):
         ):
             raise Exception(
                 "Embedding Column is not of correct type. Expected one of: {} but found: {}".format(
-                types[EMBEDDING_COLUMN_NAME],
-                embedding_column_type)
+                    types[EMBEDDING_COLUMN_NAME], embedding_column_type
+                )
             )
 
         if self._metadata_json_column is not None:
@@ -1048,8 +1046,8 @@ class SpannerVectorStore(VectorStore):
         self,
         index_name: str,
         num_leaves: int,
+        limit: int,
         embedding: List[float] = None,
-        k: int = None,
         is_embedding_nullable: bool = False,
         where_condition: str = None,
         embedding_column_is_nullable: bool = False,
@@ -1064,7 +1062,7 @@ class SpannerVectorStore(VectorStore):
             embedding or self._embedding_service,
             num_leaves,
             strategy,
-            k,
+            limit,
             is_embedding_nullable,
             where_condition,
             embedding_column_is_nullable=embedding_column_is_nullable,
@@ -1075,6 +1073,7 @@ class SpannerVectorStore(VectorStore):
         with self._database.snapshot(
             **staleness if staleness is not None else {}
         ) as snapshot:
+            print("search by ANN sql", sql)
             results = snapshot.execute_sql(sql=sql)
             return list(results)
 

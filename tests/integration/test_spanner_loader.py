@@ -15,8 +15,8 @@
 import os
 import uuid
 
-from google.cloud.spanner import Client
 import pytest
+from google.cloud.spanner import Client
 from langchain_core.documents import Document
 
 from langchain_google_spanner.loader import Column, SpannerDocumentSaver, SpannerLoader

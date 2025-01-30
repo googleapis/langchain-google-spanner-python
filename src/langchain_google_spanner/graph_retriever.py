@@ -225,7 +225,7 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
             del element["properties"][embedding_column]
 
     def __get_distance_function(
-        self, distance_strategy=DistanceStrategy.EUCLIDEIAN
+        self, distance_strategy=DistanceStrategy.EUCLIDEAN
     ) -> str:
         """Gets the vector distance function."""
         if distance_strategy == DistanceStrategy.COSINE:

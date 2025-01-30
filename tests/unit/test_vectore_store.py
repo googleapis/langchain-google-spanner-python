@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License
 
-from collections import namedtuple
 import unittest
+from collections import namedtuple
 
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect
 
