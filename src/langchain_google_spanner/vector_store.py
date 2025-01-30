@@ -1053,7 +1053,7 @@ class SpannerVectorStore(VectorStore):
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
         return_columns: List[str] = None,
-    ) -> List[Any]:
+    ) -> List[Document]:
         sql = SpannerVectorStore._query_ANN(
             self._table_name,
             index_name,
@@ -1074,7 +1074,12 @@ class SpannerVectorStore(VectorStore):
         ) as snapshot:
             print("search by ANN sql", sql)
             results = snapshot.execute_sql(sql=sql)
-            return list(results)
+            column_order_map = {
+                value: index for index, value in enumerate(self._columns_to_insert)
+            }
+            return self._get_documents_from_query_results(
+                list(results), column_order_map
+            )
 
     @staticmethod
     def _query_ANN(

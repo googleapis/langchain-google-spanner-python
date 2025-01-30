@@ -56,7 +56,7 @@ def use_case():
                 nullable_column=True,
                 num_branches=1000,
                 tree_depth=3,
-                index_type=distance_strategy,
+                distance_type=distance_strategy,
                 num_leaves=100000,
             ),
         ],
@@ -140,6 +140,10 @@ def use_case():
         id_column="categoryId",
         embedding_service=embeddings,
         embedding_column="productDescriptionEmbedding",
+        query_parameters=QueryParameters(
+            algorithm=QueryParameters.NearestNeighborsAlgorithm.APPROXIMATE_NEAREST_NEIGHBOR,
+            distance_strategy=distance_strategy,
+        ),
         skip_not_nullable_columns=True,
     )
     results = vec_store.search_by_ANN(
