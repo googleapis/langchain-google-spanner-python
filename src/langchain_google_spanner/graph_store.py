@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import re
 import string
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Any, Dict, Generator, Iterable, List, Mapping, Optional, Tuple, Union
 
 from google.cloud import spanner
@@ -1120,7 +1120,7 @@ class SpannerGraphSchema(object):
             yield v
 
 
-class SpannerInterface(object):
+class SpannerInterface(ABC):
     """Wrapper of Spanner APIs."""
 
     @abstractmethod
@@ -1135,7 +1135,7 @@ class SpannerInterface(object):
         Returns:
           List[Dict[str, Any]]: query results.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def apply_ddls(self, ddls: List[str], options: Dict[str, Any] = {}) -> None:
@@ -1144,7 +1144,7 @@ class SpannerInterface(object):
         Args:
           ddls: Spanner Schema DDLs.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def insert_or_update(
@@ -1157,7 +1157,7 @@ class SpannerInterface(object):
           columns: a tuple of column names;
           values: list of values.
         """
-        pass
+        raise NotImplementedError
 
 
 class SpannerImpl(SpannerInterface):
