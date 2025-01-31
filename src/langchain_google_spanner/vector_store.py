@@ -225,7 +225,7 @@ class GoogleSqlSemantics(DialectSemantics):
         return dict(zip(columns, values))
 
     def getIndexDistanceType(self, distance_strategy) -> str:
-        value = _GOOGLE_ALGO_INDEX_NAME.get(distance_strategy, None)
+        value = GOOGLE_DIALECT_TO_ANN_DISTANCE_FUNCTIONS.get(distance_strategy, None)
         if value is None:
             raise Exception(f"{distance_strategy} is unsupported for distance_type")
         return value
@@ -1039,10 +1039,7 @@ class SpannerVectorStore(VectorStore):
         )
         return documents
 
-    def set_strategy(strategy: DistanceStrategy):
-        self.__strategy = strategy
-
-    def search_by_ANN(
+    def __search_by_ANN(
         self,
         index_name: str,
         num_leaves: int,
@@ -1301,9 +1298,26 @@ class SpannerVectorStore(VectorStore):
         Returns:
             List[Document]: List of documents most similar to the query.
         """
-        documents = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, pre_filter=pre_filter
-        )
+        documents: List[Document] = None
+        if (
+            self._query_parameters.algorithm
+            == QueryParameters.NearestNeighborsAlgorithm.APPROXIMATE_NEAREST_NEIGHBOR
+        ):
+            documents = self.__search_by_ANN(
+                index_name=kwargs.get("index_name", None),
+                num_leaves=kwargs.get("num_leaves", 1000),
+                limit=k,
+                embedding=embedding,
+                is_embedding_nullable=kwargs.get("is_embedding_nullable", False),
+                where_condition=kwargs.get("where_condition", ""),
+                ascending=kwargs.get("ascending", True),
+                return_columns=kwargs.get("return_columns", []),
+            )
+        else:
+            documents = self.similarity_search_with_score_by_vector(
+                embedding=embedding, k=k, pre_filter=pre_filter
+            )
+
         return [doc for doc, _ in documents]
 
     def max_marginal_relevance_search_with_score_by_vector(

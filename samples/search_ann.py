@@ -146,10 +146,11 @@ def use_case():
         ),
         skip_not_nullable_columns=True,
     )
-    results = vec_store.search_by_ANN(
-        "ProductDescriptionEmbeddingIndex",
-        1000,
-        limit=20,
+    results = vec_store.similarity_search_by_vector(
+        embedding=embeddings,
+        index_name="ProductDescriptionEmbeddingIndex",
+        num_leaves=1000,
+        k=20,
         embedding_column_is_nullable=True,
         return_columns=["productName", "productDescription", "inventoryCount"],
     )

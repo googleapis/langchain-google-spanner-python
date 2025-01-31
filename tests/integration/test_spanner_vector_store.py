@@ -618,6 +618,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
             embedding_service=embeddings,
             metadata_json_column="metadata",
         )
+        _ = db
 
 
 class TestSpannerVectorStorePGSQL:
