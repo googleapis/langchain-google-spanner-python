@@ -66,68 +66,8 @@ def use_case():
     client = Client(project=project_id)
     database = client.instance(instance_id).database(google_database)
 
-    model_ddl_statements = [
-        f"""
-        CREATE MODEL IF NOT EXISTS EmbeddingsModel INPUT(
-            content STRING(MAX),
-        ) OUTPUT(
-            embeddings STRUCT<statistics STRUCT<truncated BOOL, token_count FLOAT32>, values ARRAY<FLOAT32>>,
-        ) REMOTE OPTIONS (
-            endpoint = '//aiplatform.googleapis.com/projects/{project_id}/locations/us-central1/publishers/google/models/text-embedding-004'
-        )
-        """,
-        f"""
-        CREATE MODEL IF NOT EXISTS LLMModel INPUT(
-            prompt STRING(MAX),
-        ) OUTPUT(
-            content STRING(MAX),
-        ) REMOTE OPTIONS (
-            endpoint = '//aiplatform.googleapis.com/projects/{project_id}/locations/us-central1/publishers/google/models/gemini-pro',
-            default_batch_size = 1
-        )
-        """,
-    ]
     operation = database.update_ddl(model_ddl_statements)
     operation.result(OPERATION_TIMEOUT_SECONDS)
-
-    def clear_and_insert_data(tx):
-        tx.execute_update("DELETE FROM products WHERE 1=1")
-        tx.insert(
-            "products",
-            columns=[
-                "categoryId",
-                "productId",
-                "productName",
-                "productDescription",
-                "createTime",
-                "inventoryCount",
-                "priceInCents",
-            ],
-            values=raw_data,
-        )
-
-        tx.execute_update(
-            """UPDATE products p1
-            SET productDescriptionEmbedding =
-            (SELECT embeddings.values from ML.PREDICT(MODEL EmbeddingsModel,
-            (SELECT productDescription as content FROM products p2 where p2.productId=p1.productId)))
-            WHERE categoryId=1""",
-        )
-
-        embeddings = []
-        rows = tx.execute_sql(
-            """SELECT embeddings.values
-            FROM ML.PREDICT(
-              MODEL EmbeddingsModel,
-               (SELECT "I'd like to buy a starter bike for my 3 year old child" as content)
-            )"""
-        )
-
-        for row in rows:
-            for nesting in row:
-                embeddings.extend(nesting)
-
-        return embeddings
 
     embeddings = database.run_in_transaction(clear_and_insert_data)
     if len(embeddings) > model_vector_size:
@@ -149,7 +89,8 @@ def use_case():
     results = vec_store.similarity_search_by_vector(
         embedding=embeddings,
         index_name="ProductDescriptionEmbeddingIndex",
-        num_leaves=1000,
+        num_leaves=10,
+        tree_depth=3,
         k=20,
         embedding_column_is_nullable=True,
         return_columns=["productName", "productDescription", "inventoryCount"],
@@ -270,6 +211,68 @@ columns = [
     "inventoryCount",
     "priceInCents",
 ]
+
+model_ddl_statements = [
+    f"""
+        CREATE MODEL IF NOT EXISTS EmbeddingsModel INPUT(
+            content STRING(MAX),
+        ) OUTPUT(
+            embeddings STRUCT<statistics STRUCT<truncated BOOL, token_count FLOAT32>, values ARRAY<FLOAT32>>,
+        ) REMOTE OPTIONS (
+            endpoint = '//aiplatform.googleapis.com/projects/{project_id}/locations/us-central1/publishers/google/models/text-embedding-004'
+        )
+        """,
+    f"""
+        CREATE MODEL IF NOT EXISTS LLMModel INPUT(
+            prompt STRING(MAX),
+        ) OUTPUT(
+            content STRING(MAX),
+        ) REMOTE OPTIONS (
+            endpoint = '//aiplatform.googleapis.com/projects/{project_id}/locations/us-central1/publishers/google/models/gemini-pro',
+            default_batch_size = 1
+        )
+        """,
+]
+
+
+def clear_and_insert_data(tx):
+    tx.execute_update("DELETE FROM products WHERE 1=1")
+    tx.insert(
+        "products",
+        columns=[
+            "categoryId",
+            "productId",
+            "productName",
+            "productDescription",
+            "createTime",
+            "inventoryCount",
+            "priceInCents",
+        ],
+        values=raw_data,
+    )
+
+    tx.execute_update(
+        """UPDATE products p1
+            SET productDescriptionEmbedding =
+            (SELECT embeddings.values from ML.PREDICT(MODEL EmbeddingsModel,
+            (SELECT productDescription as content FROM products p2 where p2.productId=p1.productId)))
+            WHERE categoryId=1""",
+    )
+
+    embeddings = []
+    rows = tx.execute_sql(
+        """SELECT embeddings.values
+            FROM ML.PREDICT(
+              MODEL EmbeddingsModel,
+               (SELECT "I'd like to buy a starter bike for my 3 year old child" as content)
+            )"""
+    )
+
+    for row in rows:
+        for nesting in row:
+            embeddings.extend(nesting)
+
+    return embeddings
 
 
 if __name__ == "__main__":

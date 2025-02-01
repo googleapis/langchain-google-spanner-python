@@ -216,6 +216,7 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         want = (
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            + "WHERE 1=1\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
             + "'{\"num_leaves_to_search\": 10}')\n"
@@ -286,6 +287,7 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         want = (
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            + "WHERE 1=1\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
             + "'{\"num_leaves_to_search\": 10}') DESC\n"
@@ -294,7 +296,7 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         assert got == want
 
-    def test_query_ANN_unspecified_limit(self):
+    def test_query_ANN_specified_limit(self):
         got = SpannerVectorStore._query_ANN(
             "Documents",
             "DocEmbeddingIndex",
@@ -308,6 +310,81 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         want = (
             "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            + "WHERE 1=1\n"
+            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
+            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "LIMIT 100"
+        )
+
+        assert got == want
+
+    def test_query_ANN_specified_pre_filter(self):
+        got = SpannerVectorStore._query_ANN(
+            "Documents",
+            "DocEmbeddingIndex",
+            "DocEmbedding",
+            [1.0, 2.0, 3.0],
+            10,
+            100,
+            DistanceStrategy.COSINE,
+            return_columns=["DocId"],
+            pre_filter="categoryId!=20",
+        )
+
+        want = (
+            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            + "WHERE categoryId!=20\n"
+            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
+            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "LIMIT 100"
+        )
+
+        assert got == want
+
+    def test_query_ANN_specified_pre_filter_with_nullable_column(self):
+        got = SpannerVectorStore._query_ANN(
+            "Documents",
+            "DocEmbeddingIndex",
+            "DocEmbedding",
+            [1.0, 2.0, 3.0],
+            10,
+            100,
+            DistanceStrategy.COSINE,
+            return_columns=["DocId"],
+            pre_filter="categoryId!=9",
+            embedding_column_is_nullable=True,
+        )
+
+        want = (
+            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            + "WHERE DocEmbedding IS NOT NULL AND categoryId!=9\n"
+            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
+            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "LIMIT 100"
+        )
+
+        assert got == want
+
+    def test_query_ANN_no_pre_filter_non_nullable(self):
+        got = SpannerVectorStore._query_ANN(
+            "Documents",
+            "DocEmbeddingIndex",
+            "DocEmbedding",
+            [1.0, 2.0, 3.0],
+            10,
+            100,
+            DistanceStrategy.COSINE,
+            embedding_column_is_nullable=True,
+            return_columns=["DocId"],
+            pre_filter="DocId!=2",
+        )
+
+        want = (
+            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            + "WHERE DocEmbedding IS NOT NULL AND DocId!=2\n"
             + "ORDER BY APPROX_COSINE_DISTANCE(\n"
             + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
             + "'{\"num_leaves_to_search\": 10}')\n"

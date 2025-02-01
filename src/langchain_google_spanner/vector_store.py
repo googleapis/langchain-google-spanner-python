@@ -1043,10 +1043,10 @@ class SpannerVectorStore(VectorStore):
         self,
         index_name: str,
         num_leaves: int,
-        limit: int,
+        k: int, # Defines the limit
         embedding: List[float] = None,
         is_embedding_nullable: bool = False,
-        where_condition: str = None,
+        pre_filter: str = None,
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
         return_columns: List[str] = None,
@@ -1057,10 +1057,10 @@ class SpannerVectorStore(VectorStore):
             self._embedding_column,
             embedding or self._embedding_service,
             num_leaves,
-            limit,
+            k,
             self._query_parameters.distance_strategy,
             is_embedding_nullable,
-            where_condition,
+            pre_filter=pre_filter,
             embedding_column_is_nullable=embedding_column_is_nullable,
             ascending=ascending,
             return_columns=return_columns,
@@ -1085,12 +1085,13 @@ class SpannerVectorStore(VectorStore):
         embedding_column_name: str,
         embedding: List[float],
         num_leaves: int,
-        limit: int,
+        k: int,
         strategy: DistanceStrategy = DistanceStrategy.COSINE,
         is_embedding_nullable: bool = False,
-        where_condition: str = None,
+        pre_filter: str = None,
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
+        post_filter: str = None,  # TODO(@odeke-em): Not yet supported
         return_columns: List[str] = None,
     ):
         """
@@ -1132,9 +1133,12 @@ class SpannerVectorStore(VectorStore):
             + "@{FORCE_INDEX="
             + f"{index_name}"
             + (
-                "}\n"
+                ("}\nWHERE " + ("1=1" if not pre_filter else f"{pre_filter}") + "\n")
                 if (not embedding_column_is_nullable)
-                else "}\nWHERE " + f"{embedding_column_name} IS NOT NULL\n"
+                else "}\nWHERE "
+                + f"{embedding_column_name} IS NOT NULL"
+                + ("" if not pre_filter else f" AND {pre_filter}")
+                + "\n"
             )
             + f"ORDER BY {ann_strategy_name}(\n"
             + f"  ARRAY<FLOAT32>{embedding}, {embedding_column_name}, options => JSON '"
@@ -1142,16 +1146,10 @@ class SpannerVectorStore(VectorStore):
             % (num_leaves, "" if ascending else " DESC")
         )
 
-        if where_condition:
-            sql += " WHERE " + where_condition + "\n"
-
-        if limit:
-            sql += f"LIMIT {limit}"
+        if k:
+            sql += f"LIMIT {k}"
 
         return sql.strip()
-
-    def _get_rows_by_similarity_search_ann():
-        pass
 
     def _get_rows_by_similarity_search_knn(
         self,
@@ -1204,6 +1202,15 @@ class SpannerVectorStore(VectorStore):
             )
 
             return list(results), column_order_map
+
+    def _get_rows_by_similarity_search_ann(
+        self,
+        embedding: List[float],
+        k: int,
+        pre_filter: Optional[str] = None,
+        **kwargs: Any,
+    ):
+        raise RuntimeError("Unimplemented")
 
     def _get_documents_from_query_results(
         self, results: List[List], column_order_map: Dict[str, int]
@@ -1306,10 +1313,10 @@ class SpannerVectorStore(VectorStore):
             documents = self.__search_by_ANN(
                 index_name=kwargs.get("index_name", None),
                 num_leaves=kwargs.get("num_leaves", 1000),
-                limit=k,
+                k=k,
                 embedding=embedding,
-                is_embedding_nullable=kwargs.get("is_embedding_nullable", False),
-                where_condition=kwargs.get("where_condition", ""),
+                embedding_column_is_nullable=kwargs.get("embedding_column_is_nullable", False),
+                pre_filter=kwargs.get("pre_filter", ""),
                 ascending=kwargs.get("ascending", True),
                 return_columns=kwargs.get("return_columns", []),
             )
