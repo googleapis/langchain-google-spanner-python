@@ -1017,26 +1017,34 @@ class SpannerVectorStore(VectorStore):
         Returns:
             List[Document]: List of documents most similar to the query.
         """
+        if self.__using_ANN:
+            results, column_order_map = self._get_rows_by_similarity_search_ann(
+                embedding,
+                k,
+                pre_filter,
+                **kwargs,
+            )
+        else:
+            results, column_order_map = self._get_rows_by_similarity_search_knn(
+                embedding, k, pre_filter
+            )
 
-        results, column_order_map = self._get_rows_by_similarity_search_knn(
-            embedding, k, pre_filter
-        )
         documents = self._get_documents_from_query_results(
             list(results), column_order_map
         )
         return documents
 
-    def __search_by_ANN(
+    def _get_rows_by_similarity_search_ann(
         self,
-        index_name: str,
-        num_leaves: int,
-        k: int,  # Defines the limit
-        embedding: Optional[List[float]] = None,
+        embedding: List[float],
+        k: int,
         pre_filter: Optional[str] = None,
+        index_name: str = "",
+        num_leaves: int = 1000,
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
         return_columns: Optional[List[str]] = None,
-    ) -> List[Tuple[Document, float]]:
+    ):
         sql = SpannerVectorStore._generate_sql_for_ANN(
             self._table_name,
             index_name,
@@ -1058,9 +1066,7 @@ class SpannerVectorStore(VectorStore):
             column_order_map = {
                 value: index for index, value in enumerate(self._columns_to_insert)
             }
-            return self._get_documents_from_query_results(
-                list(results), column_order_map
-            )
+            return results, column_order_map
 
     @staticmethod
     def _generate_sql_for_ANN(
@@ -1286,24 +1292,12 @@ class SpannerVectorStore(VectorStore):
         Returns:
             List[Document]: List of documents most similar to the query.
         """
-        documents: List[Tuple[Document, float]] = []
-        if self.__using_ANN:
-            documents = self.__search_by_ANN(
-                index_name=kwargs.get("index_name", None),
-                num_leaves=kwargs.get("num_leaves", 1000),
-                k=k,
-                embedding=embedding,
-                embedding_column_is_nullable=kwargs.get(
-                    "embedding_column_is_nullable", False
-                ),
-                pre_filter=pre_filter,
-                ascending=kwargs.get("ascending", True),
-                return_columns=kwargs.get("return_columns", []),
-            )
-        else:
-            documents = self.similarity_search_with_score_by_vector(
-                embedding=embedding, k=k, pre_filter=pre_filter
-            )
+        documents = self.similarity_search_with_score_by_vector(
+            embedding=embedding,
+            k=k,
+            pre_filter=pre_filter,
+            **kwargs,
+        )
 
         return [doc for doc, _ in documents]
 
@@ -1314,6 +1308,7 @@ class SpannerVectorStore(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         pre_filter: Optional[str] = None,
+        **kwargs,
     ) -> List[Tuple[Document, float]]:
         """Return docs and their similarity scores selected using the maximal marginal
             relevance.
@@ -1334,9 +1329,17 @@ class SpannerVectorStore(VectorStore):
             List of Documents and similarity scores selected by maximal marginal
                 relevance and score for each.
         """
-        results, column_order_map = self._get_rows_by_similarity_search_knn(
-            embedding, fetch_k, pre_filter
-        )
+        if self.__using_ANN:
+            results, column_order_map = self._get_rows_by_similarity_search_ann(
+                embedding,
+                fetch_k,
+                pre_filter,
+                **kwargs,
+            )
+        else:
+            results, column_order_map = self._get_rows_by_similarity_search_knn(
+                embedding, fetch_k, pre_filter
+            )
 
         embeddings = [
             result[column_order_map[self._embedding_column]] for result in results
