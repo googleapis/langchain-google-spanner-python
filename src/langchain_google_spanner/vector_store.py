@@ -73,7 +73,7 @@ class TableColumn:
     name: str
     type: str
     is_null: bool = True
-    vector_length: int = None
+    vector_length: Optional[int] = None
 
     def __post_init__(self):
         # Check if column_name is None after initialization
@@ -285,7 +285,7 @@ class QueryParameters:
 
     class NearestNeighborsAlgorithm(Enum):
         """
-        Enum for k-nearest neighbors search algorithms.
+        Enum for nearest neighbors search algorithms.
         """
 
         EXACT_NEAREST_NEIGHBOR = 1
@@ -444,7 +444,6 @@ class SpannerVectorStore(VectorStore):
         embedding_config = list(
             filter(lambda x: x.name == embedding_column, column_configs)
         )
-        print("column_configs", column_configs, "\nembedding_config", embedding_config)
         if embedding_column and len(embedding_config) > 0:
             config = embedding_config[0]
             if config.vector_length is None or config.vector_length <= 0:
@@ -642,7 +641,6 @@ class SpannerVectorStore(VectorStore):
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
         query_parameters: QueryParameters = QueryParameters(),
-        skip_not_nullable_columns=False,
     ):
         """
         Initialize the SpannerVectorStore.
