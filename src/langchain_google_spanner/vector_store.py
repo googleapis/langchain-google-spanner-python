@@ -440,7 +440,6 @@ class SpannerVectorStore(VectorStore):
         - str: The generated SQL.
         """
 
-        # 1. If any of the columns is a VectorSearchIndex
         embedding_config = list(
             filter(lambda x: x.name == embedding_column, column_configs)
         )
