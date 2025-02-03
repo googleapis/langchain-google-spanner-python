@@ -1193,15 +1193,6 @@ class SpannerVectorStore(VectorStore):
 
             return list(results), column_order_map
 
-    def _get_rows_by_similarity_search_ann(
-        self,
-        embedding: List[float],
-        k: int,
-        pre_filter: Optional[str] = None,
-        **kwargs: Any,
-    ):
-        raise RuntimeError("Unimplemented")
-
     def _get_documents_from_query_results(
         self, results: List[List], column_order_map: Dict[str, int]
     ) -> List[Tuple[Document, float]]:
@@ -1277,6 +1268,13 @@ class SpannerVectorStore(VectorStore):
         )
         return documents
 
+    @property
+    def __using_ANN(self):
+        return (
+            self._query_parameters.algorithm
+            == QueryParameters.NearestNeighborsAlgorithm.APPROXIMATE_NEAREST_NEIGHBOR
+        )
+
     def similarity_search_by_vector(
         self,
         embedding: List[float],
@@ -1296,10 +1294,7 @@ class SpannerVectorStore(VectorStore):
             List[Document]: List of documents most similar to the query.
         """
         documents: List[Tuple[Document, float]] = []
-        if (
-            self._query_parameters.algorithm
-            == QueryParameters.NearestNeighborsAlgorithm.APPROXIMATE_NEAREST_NEIGHBOR
-        ):
+        if self.__using_ANN:
             documents = self.__search_by_ANN(
                 index_name=kwargs.get("index_name", None),
                 num_leaves=kwargs.get("num_leaves", 1000),
@@ -1308,7 +1303,7 @@ class SpannerVectorStore(VectorStore):
                 embedding_column_is_nullable=kwargs.get(
                     "embedding_column_is_nullable", False
                 ),
-                pre_filter=kwargs.get("pre_filter", ""),
+                pre_filter=pre_filter,
                 ascending=kwargs.get("ascending", True),
                 return_columns=kwargs.get("return_columns", []),
             )
