@@ -395,20 +395,6 @@ class TestSpannerVectorStoreGoogleSQL_KNN:
 class TestSpannerVectorStoreGoogleSQL_ANN:
     @pytest.fixture(scope="class")
     def setup_database(self, client):
-        """
-        CREATE TABLE products (
-            categoryId INT64 NOT NULL,
-            productId INT64 NOT NULL,
-            productName STRING(MAX) NOT NULL,
-            productDescription STRING(MAX) NOT NULL,
-            productDescriptionEmbedding ARRAY<FLOAT32>(vector_length=>728),
-            createTime TIMESTAMP NOT NULL OPTIONS (
-                allow_commit_timestamp = true
-            ),
-            inventoryCount INT64 NOT NULL,
-            priceInCents INT64,
-        ) PRIMARY KEY(categoryId, productId);
-        """
         distance_strategy = DistanceStrategy.COSINE
         SpannerVectorStore.init_vector_store_table(
             instance_id=instance_id,

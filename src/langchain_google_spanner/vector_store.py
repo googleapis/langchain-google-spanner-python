@@ -672,7 +672,6 @@ class SpannerVectorStore(VectorStore):
 
         self._query_parameters = query_parameters
         self._embedding_service = embedding_service
-        self._skip_not_nullable_columns = skip_not_nullable_columns
 
         if metadata_columns is not None and ignore_metadata_columns is not None:
             raise Exception(
@@ -805,14 +804,13 @@ class SpannerVectorStore(VectorStore):
                     embedding_column_type,
                 )
 
-        if not self._skip_not_nullable_columns:
-            for column_name, column_config in column_type_map.items():
-                if column_name not in self._columns_to_insert:
-                    if "NO" == column_config[2].upper():
-                        raise Exception(
-                            "Found not nullable constraint on column: {}.",
-                            column_name,
-                        )
+        for column_name, column_config in column_type_map.items():
+            if column_name not in self._columns_to_insert:
+                if "NO" == column_config[2].upper():
+                    raise Exception(
+                        "Found not nullable constraint on column: {}.",
+                        column_name,
+                    )
 
     def _select_relevance_score_fn(self) -> Callable[[float], float]:
         if self._query_parameters.distance_strategy == DistanceStrategy.COSINE:
@@ -1046,15 +1044,14 @@ class SpannerVectorStore(VectorStore):
             self._table_name,
             index_name,
             self._embedding_column,
-            embedding or self._embedding_service,
+            embedding,
             num_leaves,
             k,
             self._query_parameters.distance_strategy,
-            is_embedding_nullable,
             pre_filter=pre_filter,
             embedding_column_is_nullable=embedding_column_is_nullable,
             ascending=ascending,
-            return_columns=return_columns,
+            return_columns=return_columns or self._columns_to_insert,
         )
         staleness = self._query_parameters.staleness
         with self._database.snapshot(
@@ -1077,12 +1074,11 @@ class SpannerVectorStore(VectorStore):
         num_leaves: int,
         k: int,
         strategy: DistanceStrategy = DistanceStrategy.COSINE,
-        is_embedding_nullable: bool = False,
         pre_filter: Optional[str] = None,
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
         post_filter: Optional[str] = None,  # TODO(@odeke-em): Not yet supported
-        return_columns: List[str] = None,
+        return_columns: Optional[List[str]] = None,
     ) -> str:
         """
         Sample query:
