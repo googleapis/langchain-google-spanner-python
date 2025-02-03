@@ -202,8 +202,8 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         assert canonicalize(got) == canonicalize(want)
 
-    def test_query_ANN(self):
-        got = SpannerVectorStore._query_ANN(
+    def test_generate_sql_for_ANN(self):
+        got = SpannerVectorStore._generate_sql_for_ANN(
             "Documents",
             "DocEmbeddingIndex",
             "DocEmbedding",
@@ -225,8 +225,8 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         assert got == want
 
-    def test_query_ANN_column_is_nullable(self):
-        got = SpannerVectorStore._query_ANN(
+    def test_generate_sql_for_ANN_column_is_nullable(self):
+        got = SpannerVectorStore._generate_sql_for_ANN(
             "Documents",
             "DocEmbeddingIndex",
             "DocEmbedding",
@@ -249,8 +249,8 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         assert got == want
 
-    def test_query_ANN_column_unspecified_return_columns_star_result(self):
-        got = SpannerVectorStore._query_ANN(
+    def test_generate_sql_for_ANN_column_unspecified_return_columns_star_result(self):
+        got = SpannerVectorStore._generate_sql_for_ANN(
             "Documents",
             "DocEmbeddingIndex",
             "DocEmbedding",
@@ -272,8 +272,8 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         assert got == want
 
-    def test_query_ANN_order_DESC(self):
-        got = SpannerVectorStore._query_ANN(
+    def test_generate_sql_for_ANN_order_DESC(self):
+        got = SpannerVectorStore._generate_sql_for_ANN(
             "Documents",
             "DocEmbeddingIndex",
             "DocEmbedding",
@@ -296,8 +296,8 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         assert got == want
 
-    def test_query_ANN_specified_limit(self):
-        got = SpannerVectorStore._query_ANN(
+    def test_generate_sql_for_ANN_specified_limit(self):
+        got = SpannerVectorStore._generate_sql_for_ANN(
             "Documents",
             "DocEmbeddingIndex",
             "DocEmbedding",
@@ -319,8 +319,8 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         assert got == want
 
-    def test_query_ANN_specified_pre_filter(self):
-        got = SpannerVectorStore._query_ANN(
+    def test_generate_sql_for_ANN_specified_pre_filter(self):
+        got = SpannerVectorStore._generate_sql_for_ANN(
             "Documents",
             "DocEmbeddingIndex",
             "DocEmbedding",
@@ -343,8 +343,8 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         assert got == want
 
-    def test_query_ANN_specified_pre_filter_with_nullable_column(self):
-        got = SpannerVectorStore._query_ANN(
+    def test_generate_sql_for_ANN_specified_pre_filter_with_nullable_column(self):
+        got = SpannerVectorStore._generate_sql_for_ANN(
             "Documents",
             "DocEmbeddingIndex",
             "DocEmbedding",
@@ -368,8 +368,8 @@ class TestSpannerVectorStore(unittest.TestCase):
 
         assert got == want
 
-    def test_query_ANN_no_pre_filter_non_nullable(self):
-        got = SpannerVectorStore._query_ANN(
+    def test_generate_sql_for_ANN_no_pre_filter_non_nullable(self):
+        got = SpannerVectorStore._generate_sql_for_ANN(
             "Documents",
             "DocEmbeddingIndex",
             "DocEmbedding",

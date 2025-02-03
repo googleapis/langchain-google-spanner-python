@@ -422,7 +422,7 @@ class SpannerVectorStore(VectorStore):
         column_configs,
         primary_key,
         secondary_indexes: Optional[List[SecondaryIndex | VectorSearchIndex]] = None,
-        vector_size: int = None,
+        vector_size: Optional[int] = None,
     ):
         """
         Generate SQL for creating the vector store table.
@@ -672,7 +672,6 @@ class SpannerVectorStore(VectorStore):
 
         self._query_parameters = query_parameters
         self._embedding_service = embedding_service
-        self.__strategy = None
         self._skip_not_nullable_columns = skip_not_nullable_columns
 
         if metadata_columns is not None and ignore_metadata_columns is not None:
@@ -907,13 +906,6 @@ class SpannerVectorStore(VectorStore):
                 values=records,
             )
 
-    def add_ann_rows(
-        self, data: List[Tuple], id_column_index: int, columns=Dict[str, str]
-    ) -> List[str]:
-        self._insert_data(data, columns)
-        ids = list(map(lambda row: row[id_column_index], data))
-        return ids
-
     def add_documents(
         self,
         documents: List[Document],
@@ -1043,15 +1035,14 @@ class SpannerVectorStore(VectorStore):
         self,
         index_name: str,
         num_leaves: int,
-        k: int, # Defines the limit
-        embedding: List[float] = None,
-        is_embedding_nullable: bool = False,
-        pre_filter: str = None,
+        k: int,  # Defines the limit
+        embedding: Optional[List[float]] = None,
+        pre_filter: Optional[str] = None,
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
-        return_columns: List[str] = None,
-    ) -> List[Document]:
-        sql = SpannerVectorStore._query_ANN(
+        return_columns: Optional[List[str]] = None,
+    ) -> List[Tuple[Document, float]]:
+        sql = SpannerVectorStore._generate_sql_for_ANN(
             self._table_name,
             index_name,
             self._embedding_column,
@@ -1069,7 +1060,6 @@ class SpannerVectorStore(VectorStore):
         with self._database.snapshot(
             **staleness if staleness is not None else {}
         ) as snapshot:
-            print("search by ANN sql", sql)
             results = snapshot.execute_sql(sql=sql)
             column_order_map = {
                 value: index for index, value in enumerate(self._columns_to_insert)
@@ -1079,7 +1069,7 @@ class SpannerVectorStore(VectorStore):
             )
 
     @staticmethod
-    def _query_ANN(
+    def _generate_sql_for_ANN(
         table_name: str,
         index_name: str,
         embedding_column_name: str,
@@ -1088,12 +1078,12 @@ class SpannerVectorStore(VectorStore):
         k: int,
         strategy: DistanceStrategy = DistanceStrategy.COSINE,
         is_embedding_nullable: bool = False,
-        pre_filter: str = None,
+        pre_filter: Optional[str] = None,
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
-        post_filter: str = None,  # TODO(@odeke-em): Not yet supported
+        post_filter: Optional[str] = None,  # TODO(@odeke-em): Not yet supported
         return_columns: List[str] = None,
-    ):
+    ) -> str:
         """
         Sample query:
             SELECT DocId
@@ -1305,7 +1295,7 @@ class SpannerVectorStore(VectorStore):
         Returns:
             List[Document]: List of documents most similar to the query.
         """
-        documents: List[Document] = None
+        documents: List[Tuple[Document, float]] = []
         if (
             self._query_parameters.algorithm
             == QueryParameters.NearestNeighborsAlgorithm.APPROXIMATE_NEAREST_NEIGHBOR
@@ -1315,7 +1305,9 @@ class SpannerVectorStore(VectorStore):
                 num_leaves=kwargs.get("num_leaves", 1000),
                 k=k,
                 embedding=embedding,
-                embedding_column_is_nullable=kwargs.get("embedding_column_is_nullable", False),
+                embedding_column_is_nullable=kwargs.get(
+                    "embedding_column_is_nullable", False
+                ),
                 pre_filter=kwargs.get("pre_filter", ""),
                 ascending=kwargs.get("ascending", True),
                 return_columns=kwargs.get("return_columns", []),
