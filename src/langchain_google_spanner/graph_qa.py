@@ -288,6 +288,7 @@ class SpannerGraphQAChain(Chain):
         inputs: Dict[str, Any],
         run_manager: Optional[CallbackManagerForChainRun] = None,
     ) -> Dict[str, str]:
+
         intermediate_steps: List = []
 
         """Generate gql statement, uses it to look up in db and answer question."""

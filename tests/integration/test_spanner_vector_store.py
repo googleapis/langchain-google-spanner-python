@@ -207,7 +207,7 @@ class TestStaticUtilityPGSQL:
         )
 
 
-class TestSpannerVectorStoreGoogleSQL:
+class TestSpannerVectorStoreGoogleSQL_KNN:
     @pytest.fixture(scope="class")
     def setup_database(self, client):
         SpannerVectorStore.init_vector_store_table(

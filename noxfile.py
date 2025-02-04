@@ -19,7 +19,6 @@ from __future__ import absolute_import
 import os
 import pathlib
 import shutil
-from pathlib import Path
 
 import nox
 
@@ -33,6 +32,7 @@ nox.options.sessions = [
     "docfx",
     "docs",
     "format",
+    "integration",
     "lint",
     "unit",
 ]

@@ -145,6 +145,7 @@ def load_data(graph: SpannerGraphStore):
 
 
 class TestSpannerGraphQAChain:
+
     @pytest.fixture(scope="module")
     def setup_db_load_data(self):
         graph = get_spanner_graph()
