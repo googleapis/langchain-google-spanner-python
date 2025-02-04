@@ -596,13 +596,13 @@ class SpannerVectorStore(VectorStore):
     def _generate_secondary_indices_ddl_ANN(
         table_name, dialect=DatabaseDialect.GOOGLE_STANDARD_SQL, secondary_indexes=[]
     ):
+        if not secondary_indexes:
+            return []
+
         if dialect != DatabaseDialect.GOOGLE_STANDARD_SQL:
             raise Exception(
                 f"ANN is only supported for the GoogleSQL dialect not {dialect}. File an issue on Github?"
             )
-
-        if not secondary_indexes:
-            return []
 
         secondary_index_ddl_statements = []
 
