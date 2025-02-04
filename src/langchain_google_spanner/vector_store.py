@@ -461,6 +461,9 @@ class SpannerVectorStore(VectorStore):
             )
         ]
 
+        if not secondary_indexes:
+            secondary_indexes = []
+
         ann_indices = list(
             filter(lambda index: type(index) is VectorSearchIndex, secondary_indexes)
         )
@@ -1080,29 +1083,8 @@ class SpannerVectorStore(VectorStore):
         pre_filter: Optional[str] = None,
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
-        post_filter: Optional[str] = None,  # TODO(@odeke-em): Not yet supported
         return_columns: Optional[List[str]] = None,
     ) -> str:
-        """
-        Sample query:
-            SELECT DocId
-            FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}
-            ORDER BY APPROX_EUCLIDEAN_DISTANCE(
-              ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding,
-              options => JSON '{"num_leaves_to_search": 10}')
-            LIMIT 100
-
-        OR
-
-            SELECT DocId
-            FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}
-            WHERE NullableDocEmbedding IS NOT NULL
-            ORDER BY APPROX_EUCLIDEAN_DISTANCE(
-              ARRAY<FLOAT32>[1.0, 2.0, 3.0], NullableDocEmbedding,
-              options => JSON '{"num_leaves_to_search": 10}')
-            LIMIT 100
-        """
-
         if not embedding_column_name:
             raise Exception("embedding_column_name must be set")
 
