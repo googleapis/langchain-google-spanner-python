@@ -24,7 +24,7 @@ import nox
 
 DEFAULT_PYTHON_VERSION = "3.10"
 CURRENT_DIRECTORY = pathlib.Path(__file__).parent.absolute()
-LINT_PATHS = ["src", "tests", "noxfile.py"]
+LINT_PATHS = ["samples", "src", "tests", "noxfile.py"]
 
 
 nox.options.sessions = [
