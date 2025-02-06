@@ -27,11 +27,13 @@ from langchain_community.graphs.graph_store import GraphStore
 from requests.structures import CaseInsensitiveDict
 
 from .type_utils import TypeUtility
+from .version import __version__
 
 MUTATION_BATCH_SIZE = 1000
 DEFAULT_DDL_TIMEOUT = 300
 NODE_KIND = "NODE"
 EDGE_KIND = "EDGE"
+USER_AGENT_GRAPH_STORE = "langchain-google-spanner-python:graph_store/" + __version__
 
 
 class NodeWrapper(object):
@@ -112,6 +114,19 @@ def partition_graph_docs(
     return {name: [n for _, n in ns.items()] for name, ns in nodes.items()}, {
         name: [e for _, e in es.items()] for name, es in edges.items()
     }
+
+
+def client_with_user_agent(
+    client: Optional[spanner.Client], user_agent: str
+) -> spanner.Client:
+    if not client:
+        client = spanner.Client()
+    client_agent = client._client_info.user_agent
+    if not client_agent:
+        client._client_info.user_agent = user_agent
+    elif user_agent not in client_agent:
+        client._client_info.user_agent = " ".join([client_agent, user_agent])
+    return client
 
 
 class GraphDocumentUtility:
@@ -1239,7 +1254,11 @@ class SpannerGraphStore(GraphStore):
           static_edge_properties: in flexible schema, treat these edge
           properties as static.
         """
-        self.impl = impl or SpannerImpl(instance_id, database_id, client)
+        self.impl = impl or SpannerImpl(
+            instance_id,
+            database_id,
+            client_with_user_agent(client, USER_AGENT_GRAPH_STORE),
+        )
         self.schema = SpannerGraphSchema(
             graph_name,
             use_flexible_schema,
