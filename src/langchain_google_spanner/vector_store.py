@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
 
@@ -40,9 +41,7 @@ ADDITIONAL_METADATA_COLUMN_NAME = "metadata"
 
 USER_AGENT_VECTOR_STORE = "langchain-google-spanner-python:vector_store/" + __version__
 
-KNN_DISTANCE_SEARCH_QUERY_ALIAS = "distance"
-
-from dataclasses import dataclass
+DISTANCE_SEARCH_QUERY_ALIAS = "distance"
 
 
 def client_with_user_agent(
@@ -423,7 +422,7 @@ class SpannerVectorStore(VectorStore):
         primary_key,
         secondary_indexes: Optional[List[SecondaryIndex | VectorSearchIndex]] = None,
         vector_size: Optional[int] = None,
-    ):
+    ) -> List[str]:
         """
         Generate SQL for creating the vector store table.
 
@@ -637,11 +636,12 @@ class SpannerVectorStore(VectorStore):
         embedding_service: Embeddings,
         id_column: str = ID_COLUMN_NAME,
         content_column: str = CONTENT_COLUMN_NAME,
-        embedding_column: str = EMBEDDING_COLUMN_NAME,
+        embedding_column: Optional[str | TableColumn] = None,
         client: Optional[spanner.Client] = None,
         metadata_columns: Optional[List[str]] = None,
         ignore_metadata_columns: Optional[List[str]] = None,
         metadata_json_column: Optional[str] = None,
+        vector_index_name: Optional[str] = None,  # For ANN.
         query_parameters: QueryParameters = QueryParameters(),
     ):
         """
@@ -667,8 +667,22 @@ class SpannerVectorStore(VectorStore):
         self._client = client_with_user_agent(client, USER_AGENT_VECTOR_STORE)
         self._id_column = id_column
         self._content_column = content_column
-        self._embedding_column = embedding_column
+        if embedding_column is None:
+            embedding_column = EMBEDDING_COLUMN_NAME
+        self._embedding_column = ""
+        self._embedding_column_type = ""
+        self._embedding_column_is_nullable = False
+        if isinstance(embedding_column, TableColumn):
+            self._embedding_column_type = embedding_column.type
+            self._embedding_column = embedding_column.name
+            self._embedding_column_is_nullable = embedding_column.is_null
+            embedding_column = embedding_column.name
+        elif isinstance(embedding_column, str):
+            self._embedding_column = embedding_column
         self._metadata_json_column = metadata_json_column
+        self._vector_index_name = ""
+        if vector_index_name:
+            self._vector_index_name = vector_index_name
 
         self._query_parameters = query_parameters
         self._embedding_service = embedding_service
@@ -1022,9 +1036,9 @@ class SpannerVectorStore(VectorStore):
         """
         if self.__using_ANN:
             results, column_order_map = self._get_rows_by_similarity_search_ann(
-                embedding,
-                k,
-                pre_filter,
+                embedding=embedding,
+                k=k,
+                pre_filter=pre_filter,
                 **kwargs,
             )
         else:
@@ -1050,14 +1064,16 @@ class SpannerVectorStore(VectorStore):
     ):
         sql = SpannerVectorStore._generate_sql_for_ANN(
             self._table_name,
-            index_name,
+            index_name or self._vector_index_name,
             self._embedding_column,
             embedding,
             num_leaves,
             k,
             self._query_parameters.distance_strategy,
             pre_filter=pre_filter,
-            embedding_column_is_nullable=embedding_column_is_nullable,
+            embedding_column_type=self._embedding_column_type,
+            embedding_column_is_nullable=self._embedding_column_is_nullable
+            or embedding_column_is_nullable,
             ascending=ascending,
             return_columns=return_columns or self._columns_to_insert,
         )
@@ -1066,10 +1082,10 @@ class SpannerVectorStore(VectorStore):
             **staleness if staleness is not None else {}
         ) as snapshot:
             results = snapshot.execute_sql(sql=sql)
-            column_order_map = {
-                value: index for index, value in enumerate(self._columns_to_insert)
-            }
-            return results, column_order_map
+            columns = (self._columns_to_insert or []).copy()
+            columns.append(DISTANCE_SEARCH_QUERY_ALIAS)
+            column_order_map = {value: index for index, value in enumerate(columns)}
+            return list(results), column_order_map
 
     @staticmethod
     def _generate_sql_for_ANN(
@@ -1081,12 +1097,16 @@ class SpannerVectorStore(VectorStore):
         k: int,
         strategy: DistanceStrategy = DistanceStrategy.COSINE,
         pre_filter: Optional[str] = None,
+        embedding_column_type: str = "ARRAY<FLOAT32>",
         embedding_column_is_nullable: bool = False,
         ascending: bool = True,
         return_columns: Optional[List[str]] = None,
     ) -> str:
         if not embedding_column_name:
             raise Exception("embedding_column_name must be set")
+
+        if not index_name:
+            raise Exception("index_name must be set")
 
         ann_strategy_name = GOOGLE_DIALECT_TO_ANN_DISTANCE_FUNCTIONS.get(strategy, None)
         if not ann_strategy_name:
@@ -1099,8 +1119,12 @@ class SpannerVectorStore(VectorStore):
         if not column_names:
             column_names = "*"
 
+        distance_alias = DISTANCE_SEARCH_QUERY_ALIAS
         sql = (
-            f"SELECT {column_names} FROM {table_name}"
+            f"SELECT {column_names}, {ann_strategy_name}("
+            + f"{embedding_column_type}{embedding}, {embedding_column_name}, options => JSON '"
+            + ('{"num_leaves_to_search": %s}\') as %s\n' % (num_leaves, distance_alias))
+            + f"FROM {table_name}"
             + "@{FORCE_INDEX="
             + f"{index_name}"
             + (
@@ -1111,10 +1135,9 @@ class SpannerVectorStore(VectorStore):
                 + ("" if not pre_filter else f" AND {pre_filter}")
                 + "\n"
             )
-            + f"ORDER BY {ann_strategy_name}(\n"
-            + f"  ARRAY<FLOAT32>{embedding}, {embedding_column_name}, options => JSON '"
-            + '{"num_leaves_to_search": %s}\')%s\n'
-            % (num_leaves, "" if ascending else " DESC")
+            + f"ORDER BY {distance_alias}"
+            + ("" if ascending else " DESC")
+            + "\n"
         )
 
         if k:
@@ -1144,7 +1167,7 @@ class SpannerVectorStore(VectorStore):
         column_order_map = {
             value: index for index, value in enumerate(self._columns_to_insert)
         }
-        column_order_map[KNN_DISTANCE_SEARCH_QUERY_ALIAS] = len(self._columns_to_insert)
+        column_order_map[DISTANCE_SEARCH_QUERY_ALIAS] = len(self._columns_to_insert)
 
         sql_query = """
             SELECT {select_column_names} {distance_function}({embedding_column}, {vector_embedding_placeholder}) AS {distance_alias}
@@ -1160,7 +1183,7 @@ class SpannerVectorStore(VectorStore):
             filter=pre_filter if pre_filter is not None else "1 = 1",
             k_count=k,
             distance_function=distance_function,
-            distance_alias=KNN_DISTANCE_SEARCH_QUERY_ALIAS,
+            distance_alias=DISTANCE_SEARCH_QUERY_ALIAS,
         )
 
         with self._database.snapshot(
@@ -1195,9 +1218,7 @@ class SpannerVectorStore(VectorStore):
                 }
 
             doc = Document(page_content=page_content, metadata=metadata)
-            documents.append(
-                (doc, row[column_order_map[KNN_DISTANCE_SEARCH_QUERY_ALIAS]])
-            )
+            documents.append((doc, row[column_order_map[DISTANCE_SEARCH_QUERY_ALIAS]]))
 
         return documents
 
@@ -1221,7 +1242,10 @@ class SpannerVectorStore(VectorStore):
         """
         embedding = self._embedding_service.embed_query(query)
         documents = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, pre_filter=pre_filter
+            embedding=embedding,
+            k=k,
+            pre_filter=pre_filter,
+            **kwargs,
         )
         return [doc for doc, _ in documents]
 
@@ -1245,7 +1269,10 @@ class SpannerVectorStore(VectorStore):
         """
         embedding = self._embedding_service.embed_query(query)
         documents = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, pre_filter=pre_filter
+            embedding=embedding,
+            k=k,
+            pre_filter=pre_filter,
+            **kwargs,
         )
         return documents
 
@@ -1313,9 +1340,9 @@ class SpannerVectorStore(VectorStore):
         """
         if self.__using_ANN:
             results, column_order_map = self._get_rows_by_similarity_search_ann(
-                embedding,
-                fetch_k,
-                pre_filter,
+                embedding=embedding,
+                k=fetch_k,
+                pre_filter=pre_filter,
                 **kwargs,
             )
         else:
@@ -1367,7 +1394,12 @@ class SpannerVectorStore(VectorStore):
             List of Documents selected by maximal marginal relevance.
         """
         documents_with_scores = self.max_marginal_relevance_search_with_score_by_vector(
-            embedding, k, fetch_k, lambda_mult, pre_filter
+            embedding,
+            k,
+            fetch_k,
+            lambda_mult,
+            pre_filter,
+            **kwargs,
         )
 
         return [doc for doc, _ in documents_with_scores]
