@@ -207,7 +207,7 @@ class TestStaticUtilityPGSQL:
         )
 
 
-class TestSpannerVectorStoreGoogleSQL:
+class TestSpannerVectorStoreGoogleSQL_KNN:
     @pytest.fixture(scope="class")
     def setup_database(self, client):
         SpannerVectorStore.init_vector_store_table(
@@ -301,7 +301,7 @@ class TestSpannerVectorStoreGoogleSQL:
 
         deleted = db.delete(documents=[docs[0], docs[1]])
 
-        assert deleted == True
+        assert deleted
 
     def test_spanner_vector_search_data1(self, setup_database):
         loader, embeddings = setup_database
@@ -483,7 +483,7 @@ class TestSpannerVectorStorePGSQL:
 
         deleted = db.delete(documents=[docs[0], docs[1]])
 
-        assert deleted == True
+        assert deleted
 
     def test_spanner_vector_search_data1(self, setup_database):
         loader, embeddings = setup_database
