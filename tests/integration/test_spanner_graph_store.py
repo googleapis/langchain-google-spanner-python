@@ -18,7 +18,9 @@ import os
 import random
 import string
 
+import pytest
 from google.cloud.spanner import Client  # type: ignore
+from google.cloud.spanner_v1 import JsonObject
 from langchain_community.graphs.graph_document import GraphDocument, Node, Relationship
 from langchain_core.documents import Document
 
@@ -72,6 +74,10 @@ def random_none():
     return None
 
 
+def random_json():
+    return JsonObject({random_string(exclude_whitespaces=True): random_int()})
+
+
 def random_primitive_generators():
     return [
         random_int,
@@ -87,7 +93,7 @@ def random_generators():
     return (
         random_primitive_generators()
         + [lambda: random_array(g) for g in random_primitive_generators()]
-        + [random_none]
+        + [random_none, random_json]
     )
 
 
@@ -95,6 +101,10 @@ properties = [
     ("p{}".format(i), random_val_gen)
     for i, random_val_gen in enumerate(random_generators())
 ]
+
+
+def random_property_names(k):
+    return [k for k, _ in random.choices(properties, k=k)]
 
 
 def random_property():
@@ -148,7 +158,8 @@ def random_graph_doc(suffix):
 
 
 class TestSpannerGraphStore:
-    def test_spanner_graph_random_doc(self):
+    @pytest.mark.parametrize("use_flexible_schema", [False, True])
+    def test_spanner_graph_random_doc(self, use_flexible_schema):
         suffix = random_string(num_char=5, exclude_whitespaces=True)
         graph_name = "test_graph{}".format(suffix)
         graph = SpannerGraphStore(
@@ -156,6 +167,13 @@ class TestSpannerGraphStore:
             google_database,
             graph_name,
             client=Client(project=project_id),
+            use_flexible_schema=use_flexible_schema,
+            static_node_properties=random_property_names(
+                random_int(l=0, u=len(properties))
+            ),
+            static_edge_properties=random_property_names(
+                random_int(l=0, u=len(properties))
+            ),
         )
         graph.refresh_schema()
 
@@ -212,7 +230,8 @@ class TestSpannerGraphStore:
             print(graph.get_ddl())
             graph.cleanup()
 
-    def test_spanner_graph_doc_with_duplicate_elements(self):
+    @pytest.mark.parametrize("use_flexible_schema", [False, True])
+    def test_spanner_graph_doc_with_duplicate_elements(self, use_flexible_schema):
         suffix = random_string(num_char=5, exclude_whitespaces=True)
         graph_name = "test_graph{}".format(suffix)
         graph = SpannerGraphStore(
@@ -220,6 +239,13 @@ class TestSpannerGraphStore:
             google_database,
             graph_name,
             client=Client(project=project_id),
+            use_flexible_schema=use_flexible_schema,
+            static_node_properties=random_property_names(
+                random_int(l=0, u=len(properties))
+            ),
+            static_edge_properties=random_property_names(
+                random_int(l=0, u=len(properties))
+            ),
         )
         graph.refresh_schema()
 
@@ -239,12 +265,16 @@ class TestSpannerGraphStore:
             )
             graph.add_graph_documents([doc])
 
+            # In the case of flexible schema, `properties` is a nested json
+            # field.
             results = graph.query(
                 """
           GRAPH {}
 
           MATCH -[e]->
-          RETURN TO_JSON(e)['properties'] AS properties
+          LET properties = TO_JSON(e)['properties']
+          RETURN COALESCE(properties.properties, JSON "{{}}") AS dynamic_properties,
+                 properties AS static_properties
           """.format(
                     graph_name
                 ),
@@ -255,8 +285,13 @@ class TestSpannerGraphStore:
             edge_properties = edge0.properties
             edge_properties.update(edge1.properties)
             missing_properties = set(edge_properties.keys()).difference(
-                set(results[0]["properties"].keys())
+                set(results[0]["dynamic_properties"].keys()).union(
+                    set(results[0]["static_properties"].keys())
+                )
             )
+            print(edge0.properties)
+            print(edge1.properties)
+            print(results)
             assert (
                 len(missing_properties) == 0
             ), "Missing properties of edge: {}".format(missing_properties)
@@ -264,3 +299,99 @@ class TestSpannerGraphStore:
         finally:
             print("Clean up graph with name `{}`".format(graph_name))
             graph.cleanup()
+
+    @pytest.mark.parametrize("use_flexible_schema", [False, True])
+    def test_spanner_graph_avoid_unnecessary_overwrite(self, use_flexible_schema):
+        suffix = random_string(num_char=5, exclude_whitespaces=True)
+        graph_name = "test_graph{}".format(suffix)
+        graph = SpannerGraphStore(
+            instance_id,
+            google_database,
+            graph_name,
+            client=Client(project=project_id),
+            use_flexible_schema=use_flexible_schema,
+            static_node_properties=["a", "b"],
+            static_edge_properties=["a", "b"],
+        )
+        graph.refresh_schema()
+
+        try:
+            node0 = Node(
+                id=random_string(),
+                type="Node{}".format(suffix),
+                properties={"a": 1, "b": 1},
+            )
+            node1 = Node(
+                id=random_string(),
+                type="Node{}".format(suffix),
+                properties={"a": 1, "b": 1},
+            )
+            edge0 = Relationship(
+                source=node0,
+                target=node1,
+                type="Edge{}".format(suffix),
+                properties={"a": 1, "b": 1},
+            )
+            doc = GraphDocument(
+                nodes=[node0, node1],
+                relationships=[edge0],
+                source=Document(
+                    page_content="Hello, world!",
+                    metadata={"source": "https://example.com"},
+                ),
+            )
+
+            query = """GRAPH {}
+                   MATCH (n {{id: @nodeId}})
+                   LET properties = TO_JSON(n)['properties']
+                   RETURN int64(properties.a) AS a, int64(properties.b) AS b
+                   UNION ALL
+                   MATCH -[e {{id: @nodeId}}]->
+                   LET properties = TO_JSON(e)['properties']
+                   RETURN int64(properties.a) AS a, int64(properties.b) AS b
+                """.format(
+                graph_name
+            )
+            graph.add_graph_documents([doc])
+
+            # Test initial value: a=1, b=1
+            results = graph.query(query, {"nodeId": node0.id})
+            assert len(results) == 2, "Actual results: {}".format(results)
+            assert all((r["a"] == 1 for r in results)), "Actual results: {}".format(
+                results
+            )
+            assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(
+                results
+            )
+
+            node0.properties["a"] = 2
+            edge0.properties["a"] = 2
+            graph.add_graph_documents([doc])
+
+            # Test value after first overwrite: a=2, b=1
+            results = graph.query(query, {"nodeId": node0.id})
+            assert len(results) == 2, "Actual results: {}".format(results)
+            assert all((r["a"] == 2 for r in results)), "Actual results: {}".format(
+                results
+            )
+            assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(
+                results
+            )
+
+            node0.properties = {}
+            edge0.properties = {}
+            graph.add_graph_documents([doc])
+
+            # Test value after second overwrite: a=2, b=1
+            results = graph.query(query, {"nodeId": node0.id})
+            assert len(results) == 2, "Actual results: {}".format(results)
+            assert all((r["a"] == 2 for r in results)), "Actual results: {}".format(
+                results
+            )
+            assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(
+                results
+            )
+        finally:
+            print("Clean up graph with name `{}`".format(graph_name))
+            graph.cleanup()
+            print("Actual results:", results)
