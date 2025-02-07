@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.7.0...v0.8.0) (2025-02-07)
+
+
+### Features
+
+* **graph:** Flexible Schema Extension to SpannerGraphStore ([#125](https://github.com/googleapis/langchain-google-spanner-python/issues/125)) ([44db678](https://github.com/googleapis/langchain-google-spanner-python/commit/44db67837dd81344fecfe068c2036d5a5345aecf))
+* Implement Approximate Nearest Neighbor support for DDL (CREATE TABLE, CREATE VECTOR INDEX) ([#124](https://github.com/googleapis/langchain-google-spanner-python/issues/124)) ([5a25f91](https://github.com/googleapis/langchain-google-spanner-python/commit/5a25f91d5e96e19fc7b05b50fc98b79baa8b8f9e))
+* **samples:** Provide guide for ANN vector store end-to-end usage in Jupyter Notebook ([#139](https://github.com/googleapis/langchain-google-spanner-python/issues/139)) ([f78b9ee](https://github.com/googleapis/langchain-google-spanner-python/commit/f78b9ee37497876946745f5ed78c2c62b185b3eb)), closes [#94](https://github.com/googleapis/langchain-google-spanner-python/issues/94)
+
+
+### Bug Fixes
+
+* Make ANN algorithm updates based off usage + testing ([#140](https://github.com/googleapis/langchain-google-spanner-python/issues/140)) ([524678b](https://github.com/googleapis/langchain-google-spanner-python/commit/524678b3038e61d73fb49469a678ef16cdf8ae7c))
+* **testing+linting:** Add nox lint+format directives ([#123](https://github.com/googleapis/langchain-google-spanner-python/issues/123)) ([b10dc28](https://github.com/googleapis/langchain-google-spanner-python/commit/b10dc28ac0f30b0907be2c0747c1890d4d0ba034))
+
 ## [0.7.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.6.0...v0.7.0) (2025-01-29)
 
 
