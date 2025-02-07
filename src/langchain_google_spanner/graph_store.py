@@ -33,7 +33,7 @@ MUTATION_BATCH_SIZE = 1000
 DEFAULT_DDL_TIMEOUT = 300
 NODE_KIND = "NODE"
 EDGE_KIND = "EDGE"
-USER_AGENT_GRAPH_STORE = "langchain-google-spanner-python:graph_store/" + __version__
+USER_AGENT_GRAPH_STORE = "langchain-google-spanner-python:graphstore/" + __version__
 
 
 class NodeWrapper(object):
