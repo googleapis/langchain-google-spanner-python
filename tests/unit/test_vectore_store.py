@@ -215,11 +215,12 @@ class TestSpannerVectorStore(unittest.TestCase):
         )
 
         want = (
-            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            "SELECT DocId, APPROX_COSINE_DISTANCE("
+            + "ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}') as distance\n"
+            + "FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "WHERE 1=1\n"
-            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
-            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "ORDER BY distance\n"
             + "LIMIT 100"
         )
 
@@ -239,11 +240,12 @@ class TestSpannerVectorStore(unittest.TestCase):
         )
 
         want = (
-            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            "SELECT DocId, APPROX_COSINE_DISTANCE("
+            + "ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}') as distance\n"
+            + "FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "WHERE DocEmbedding IS NOT NULL\n"
-            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
-            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "ORDER BY distance\n"
             + "LIMIT 100"
         )
 
@@ -262,11 +264,12 @@ class TestSpannerVectorStore(unittest.TestCase):
         )
 
         want = (
-            "SELECT * FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            "SELECT *, APPROX_COSINE_DISTANCE("
+            + "ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}') as distance\n"
+            + "FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "WHERE DocEmbedding IS NOT NULL\n"
-            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
-            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "ORDER BY distance\n"
             + "LIMIT 100"
         )
 
@@ -286,11 +289,12 @@ class TestSpannerVectorStore(unittest.TestCase):
         )
 
         want = (
-            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            "SELECT DocId, APPROX_COSINE_DISTANCE("
+            + "ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}') as distance\n"
+            + "FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "WHERE 1=1\n"
-            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
-            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + "'{\"num_leaves_to_search\": 10}') DESC\n"
+            + "ORDER BY distance DESC\n"
             + "LIMIT 100"
         )
 
@@ -309,11 +313,12 @@ class TestSpannerVectorStore(unittest.TestCase):
         )
 
         want = (
-            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            "SELECT DocId, APPROX_COSINE_DISTANCE("
+            + "ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}') as distance\n"
+            + "FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "WHERE 1=1\n"
-            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
-            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "ORDER BY distance\n"
             + "LIMIT 100"
         )
 
@@ -333,11 +338,12 @@ class TestSpannerVectorStore(unittest.TestCase):
         )
 
         want = (
-            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            "SELECT DocId, APPROX_COSINE_DISTANCE("
+            + "ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}') as distance\n"
+            + "FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "WHERE categoryId!=20\n"
-            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
-            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "ORDER BY distance\n"
             + "LIMIT 100"
         )
 
@@ -358,11 +364,12 @@ class TestSpannerVectorStore(unittest.TestCase):
         )
 
         want = (
-            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            "SELECT DocId, APPROX_COSINE_DISTANCE("
+            + "ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}') as distance\n"
+            + "FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "WHERE DocEmbedding IS NOT NULL AND categoryId!=9\n"
-            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
-            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "ORDER BY distance\n"
             + "LIMIT 100"
         )
 
@@ -383,11 +390,12 @@ class TestSpannerVectorStore(unittest.TestCase):
         )
 
         want = (
-            "SELECT DocId FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
+            "SELECT DocId, APPROX_COSINE_DISTANCE("
+            + "ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
+            + "'{\"num_leaves_to_search\": 10}') as distance\n"
+            + "FROM Documents@{FORCE_INDEX=DocEmbeddingIndex}\n"
             + "WHERE DocEmbedding IS NOT NULL AND DocId!=2\n"
-            + "ORDER BY APPROX_COSINE_DISTANCE(\n"
-            + "  ARRAY<FLOAT32>[1.0, 2.0, 3.0], DocEmbedding, options => JSON "
-            + "'{\"num_leaves_to_search\": 10}')\n"
+            + "ORDER BY distance\n"
             + "LIMIT 100"
         )
 
