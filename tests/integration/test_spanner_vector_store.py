@@ -35,6 +35,12 @@ instance_id = os.environ["INSTANCE_ID"]
 google_database = os.environ["GOOGLE_DATABASE"]
 pg_database = os.environ["PG_DATABASE"]
 table_name = "test_table" + str(uuid.uuid4()).replace("-", "_")
+# Cloud Spanner takes 30+ minutes to create a Vector search index
+# hence in order to make integration tests usable, before
+# they fix the bad delay, let's reuse the same database and never DROP
+# the database nor table to allow for effective reuse.
+ann_db = os.environ.get("GOOGLE_SPANNER_ANN_DB", "my-spanner-db-ann")
+table_name_ANN = "our_table_ann"
 
 
 OPERATION_TIMEOUT_SECONDS = 240
@@ -400,11 +406,6 @@ title_vector_index_name = "title_v_index"
 title_vector_embedding_column = TableColumn(
     name="title_embedding", type="ARRAY<FLOAT64>", is_null=True
 )
-# Cloud Spanner takes 30+ minutes to create a Vector search index
-# hence in order to make integration tests about to be used before
-# they fix the bad delay, let's reuse the name and never DROP
-# the table to allow for effective reuse.
-table_name_ANN = "our_table_ann"
 
 
 class TestSpannerVectorStoreGoogleSQL_ANN:
@@ -420,7 +421,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
 
             SpannerVectorStore.init_vector_store_table(
                 instance_id=instance_id,
-                database_id=google_database,
+                database_id=ann_db,
                 table_name=table_name_ANN,
                 vector_size=title_vector_size,
                 id_column="row_id",
@@ -447,7 +448,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
 
         def cleanup_db():
             print("\nPerforming GSQL cleanup...")
-            database = client.instance(instance_id).database(google_database)
+            database = client.instance(instance_id).database(ann_db)
 
             def delete_from_table(txn):
                 return txn.execute_update(f"DELETE FROM {table_name_ANN} WHERE 1=1")
@@ -472,7 +473,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
 
         db = SpannerVectorStore(
             instance_id=instance_id,
-            database_id=google_database,
+            database_id=ann_db,
             table_name=table_name_ANN,
             id_column="row_id",
             ignore_metadata_columns=[],
@@ -492,7 +493,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
 
         db = SpannerVectorStore(
             instance_id=instance_id,
-            database_id=google_database,
+            database_id=ann_db,
             table_name=table_name_ANN,
             id_column="row_id",
             ignore_metadata_columns=[],
@@ -524,7 +525,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
 
         db = SpannerVectorStore(
             instance_id=instance_id,
-            database_id=google_database,
+            database_id=ann_db,
             table_name=table_name_ANN,
             id_column="row_id",
             ignore_metadata_columns=[],
@@ -544,7 +545,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
 
         db = SpannerVectorStore(
             instance_id=instance_id,
-            database_id=google_database,
+            database_id=ann_db,
             table_name=table_name_ANN,
             id_column="row_id",
             ignore_metadata_columns=[],
@@ -575,7 +576,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
 
         db = SpannerVectorStore(
             instance_id=instance_id,
-            database_id=google_database,
+            database_id=ann_db,
             table_name=table_name_ANN,
             id_column="row_id",
             ignore_metadata_columns=[],
@@ -610,7 +611,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
 
         db = SpannerVectorStore(
             instance_id=instance_id,
-            database_id=google_database,
+            database_id=ann_db,
             table_name=table_name_ANN,
             id_column="row_id",
             ignore_metadata_columns=[],
