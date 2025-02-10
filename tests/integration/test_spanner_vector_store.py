@@ -14,6 +14,7 @@
 
 import datetime
 import os
+import sys
 import uuid
 from typing import Dict
 
@@ -40,7 +41,8 @@ table_name = "test_table" + str(uuid.uuid4()).replace("-", "_")
 # they fix the bad delay, let's reuse the same database and never DROP
 # the database nor table to allow for effective reuse.
 ann_db = os.environ.get("GOOGLE_SPANNER_ANN_DB", "my-spanner-db-ann")
-table_name_ANN = "our_table_ann"
+uniq_py_suffix = f"_py{sys.version_info.major}{sys.version_info.minor}"
+table_name_ANN = f"our_table_ann{uniq_py_suffix}"
 
 
 OPERATION_TIMEOUT_SECONDS = 240
@@ -402,7 +404,7 @@ class TestSpannerVectorStoreGoogleSQL_KNN:
 
 
 title_vector_size = 3
-title_vector_index_name = "title_v_index"
+title_vector_index_name = f"title_v_index{uniq_py_suffix}"
 title_vector_embedding_column = TableColumn(
     name="title_embedding", type="ARRAY<FLOAT64>", is_null=True
 )
