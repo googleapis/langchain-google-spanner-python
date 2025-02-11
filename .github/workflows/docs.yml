@@ -3,6 +3,8 @@ on:
     branches:
       - main
 name: docs
+permissions:
+  contents: read # This applies to all jobs
 jobs:
   docs:
     runs-on: ubuntu-latest
