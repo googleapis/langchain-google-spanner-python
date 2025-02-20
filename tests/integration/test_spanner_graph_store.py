@@ -60,6 +60,10 @@ def random_timestamp():
     return datetime.datetime.fromtimestamp(random_int(0, 366 * 24 * 60 * 60 * 1000))
 
 
+def random_date():
+    return datetime.date.fromtimestamp(random_int(0, 366 * 24 * 60 * 60 * 1000))
+
+
 def random_param():
     # None param is not supported.
     return random.choice(random_generators())() or random_param()
@@ -86,6 +90,7 @@ def random_primitive_generators():
         random_bool,
         random_float,
         random_timestamp,
+        random_date,
     ]
 
 

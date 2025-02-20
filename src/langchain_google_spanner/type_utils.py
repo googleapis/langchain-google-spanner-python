@@ -62,6 +62,8 @@ class TypeUtility(object):
             return "TIMESTAMP"
         if t.code == param_types.TypeCode.JSON:
             return "JSON"
+        if t.code == param_types.TypeCode.DATE:
+            return "DATE"
         raise ValueError("Unsupported type: %s" % t)
 
     @staticmethod
@@ -90,6 +92,8 @@ class TypeUtility(object):
             return param_types.TIMESTAMP
         if s == "JSON":
             return param_types.JSON
+        if s == "DATE":
+            return param_types.DATE
         if s.startswith("ARRAY<") and s.endswith(">"):
             return param_types.Array(
                 TypeUtility.schema_str_to_spanner_type(s[len("ARRAY<") : -len(">")])
@@ -118,6 +122,8 @@ class TypeUtility(object):
             return param_types.FLOAT64
         if isinstance(v, datetime.datetime):
             return param_types.TIMESTAMP
+        if isinstance(v, datetime.date):
+            return param_types.DATE
         if isinstance(v, JsonObject):
             return param_types.JSON
         if isinstance(v, list):
@@ -144,6 +150,8 @@ class TypeUtility(object):
         if isinstance(v, bytes):
             return base64.b64encode(v).decode("utf-8")
         if isinstance(v, datetime.datetime):
+            return str(v)
+        if isinstance(v, datetime.date):
             return str(v)
         if isinstance(v, JsonObject):
             return v
