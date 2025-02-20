@@ -901,10 +901,12 @@ class SpannerGraphSchema(object):
         Returns:
           str: a string representation of the graph schema.
         """
-        properties = CaseInsensitiveDict({
-            k: TypeUtility.spanner_type_to_schema_str(v)
-            for k, v in self.properties.items()
-        })
+        properties = CaseInsensitiveDict(
+            {
+                k: TypeUtility.spanner_type_to_schema_str(v)
+                for k, v in self.properties.items()
+            }
+        )
         return json.dumps(
             {
                 "Name of graph": self.graph_name,
