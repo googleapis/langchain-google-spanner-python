@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.0...v0.8.1) (2025-02-20)
+
+
+### Bug Fixes
+
+* **graph:** Allow property names with different cases ([#149](https://github.com/googleapis/langchain-google-spanner-python/issues/149)) ([37f2324](https://github.com/googleapis/langchain-google-spanner-python/commit/37f2324c37c83bcbbbeb7e04e34337c1d11edbe9))
+* **graph:** Support DATE type ([#150](https://github.com/googleapis/langchain-google-spanner-python/issues/150)) ([941e38e](https://github.com/googleapis/langchain-google-spanner-python/commit/941e38eece81612dfd42f7e5343e6f3691605fa9))
+
 ## [0.8.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.7.0...v0.8.0) (2025-02-07)
 
 
