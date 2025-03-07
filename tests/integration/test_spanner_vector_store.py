@@ -90,6 +90,22 @@ class TestStaticUtilityGoogleSQL_KNN:
     def setup_database(self, client, cleanupGSQL):
         yield
 
+    def test_init_vector_store_table_with_basic_args(self):
+        SpannerVectorStore.init_vector_store_table(
+            instance_id=instance_id,
+            database_id=google_database,
+            table_name=table_name,
+        )
+
+    def test_init_vector_store_table_with_embeddings(self):
+        embeddings = FakeEmbeddings(size=3)
+        SpannerVectorStore.init_vector_store_table(
+            instance_id=instance_id,
+            database_id=google_database,
+            table_name=table_name,
+            embedding_service=embeddings,
+        )
+
     def test_init_vector_store_table1(self):
         SpannerVectorStore.init_vector_store_table(
             instance_id=instance_id,
@@ -159,6 +175,13 @@ class TestStaticUtilityPGSQL:
     @pytest.fixture(autouse=True)
     def setup_database(self, client, cleanupPGSQL):
         yield
+
+    def test_init_vector_store_basic_args(self):
+        SpannerVectorStore.init_vector_store_table(
+            instance_id=instance_id,
+            database_id=pg_database,
+            table_name=table_name,
+        )
 
     def test_init_vector_store_table1(self):
         SpannerVectorStore.init_vector_store_table(
