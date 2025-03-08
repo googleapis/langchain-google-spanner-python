@@ -253,3 +253,9 @@ Disclaimer
 
 This is not an officially supported Google product.
 
+
+Limitations
+-----------
+
+* Approximate Nearest Neighbors (ANN) strategies are only supported for the GoogleSQL dialect
+* ANN's `ALTER VECTOR INDEX` is not yet supported by [Google Cloud Spanner](https://cloud.google.com/spanner/docs/find-approximate-nearest-neighbors#limitations)

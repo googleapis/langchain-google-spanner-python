@@ -16,11 +16,7 @@ import json
 from typing import Any, List, Optional
 
 from langchain.schema.retriever import BaseRetriever
-from langchain_community.graphs.graph_document import GraphDocument
-from langchain_core.callbacks import (
-    CallbackManagerForChainRun,
-    CallbackManagerForRetrieverRun,
-)
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.example_selectors import SemanticSimilarityExampleSelector
@@ -229,7 +225,7 @@ class SpannerGraphVectorContextRetriever(BaseRetriever):
             del element["properties"][embedding_column]
 
     def __get_distance_function(
-        self, distance_strategy=DistanceStrategy.EUCLIDEIAN
+        self, distance_strategy=DistanceStrategy.EUCLIDEAN
     ) -> str:
         """Gets the vector distance function."""
         if distance_strategy == DistanceStrategy.COSINE:
