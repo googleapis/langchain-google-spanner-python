@@ -784,7 +784,7 @@ class SpannerGraphSchema(object):
             properties as static;
           static_edge_properties: in flexible schema, treat these edge
             properties as static.
-        
+
         Raises:
           ValueError: An error occured initializing graph schema.
         """
