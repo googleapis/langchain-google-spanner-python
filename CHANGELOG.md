@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.2...v0.9.0) (2025-04-09)
+
+
+### Features
+
+* Graph_name validation on graph store construction ([#162](https://github.com/googleapis/langchain-google-spanner-python/issues/162)) ([c753a74](https://github.com/googleapis/langchain-google-spanner-python/commit/c753a747f600582f14503d6ed29281a50f997b34))
+
 ## [0.8.2](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.1...v0.8.2) (2025-03-12)
 
 
