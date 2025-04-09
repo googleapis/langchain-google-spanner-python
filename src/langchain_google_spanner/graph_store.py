@@ -133,6 +133,10 @@ class GraphDocumentUtility:
     """Utilities to process graph documents."""
 
     @staticmethod
+    def is_valid_identifier(s: str) -> bool:
+        return re.match(r"^[a-z][a-z0-9_]{0,127}$", s, re.IGNORECASE) is not None
+
+    @staticmethod
     def to_identifier(s: str) -> str:
         return "`" + s + "`"
 
@@ -780,7 +784,15 @@ class SpannerGraphSchema(object):
             properties as static;
           static_edge_properties: in flexible schema, treat these edge
             properties as static.
+
+        Raises:
+          ValueError: An error occured initializing graph schema.
         """
+        if not GraphDocumentUtility.is_valid_identifier(graph_name):
+            raise ValueError(
+                "Graph name `{}` is not a valid identifier".format(graph_name)
+            )
+
         self.graph_name: str = graph_name
         self.nodes: CaseInsensitiveDict[ElementSchema] = CaseInsensitiveDict({})
         self.edges: CaseInsensitiveDict[ElementSchema] = CaseInsensitiveDict({})

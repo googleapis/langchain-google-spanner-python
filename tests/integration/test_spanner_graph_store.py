@@ -400,3 +400,36 @@ class TestSpannerGraphStore:
             print("Clean up graph with name `{}`".format(graph_name))
             graph.cleanup()
             print("Actual results:", results)
+
+    @pytest.mark.parametrize(
+        "graph_name, raises_exception",
+        [
+            ("test_graph", False),
+            ("123test_graph", True),
+            ("test_graph2", False),
+            ("test-graph", True),
+        ],
+    )
+    def test_spanner_graph_invalid_graph_name(self, graph_name, raises_exception):
+        suffix = random_string(num_char=5, exclude_whitespaces=True)
+        graph_name += suffix
+        if raises_exception:
+            with pytest.raises(Exception) as excinfo:
+                SpannerGraphStore(
+                    instance_id,
+                    google_database,
+                    graph_name,
+                    client=Client(project=project_id),
+                    static_node_properties=["a", "b"],
+                    static_edge_properties=["a", "b"],
+                )
+            assert "not a valid identifier" in str(excinfo.value)
+        else:
+            SpannerGraphStore(
+                instance_id,
+                google_database,
+                graph_name,
+                client=Client(project=project_id),
+                static_node_properties=["a", "b"],
+                static_edge_properties=["a", "b"],
+            )
