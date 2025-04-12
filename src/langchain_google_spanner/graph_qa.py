@@ -308,7 +308,7 @@ class SpannerGraphQAChain(Chain):
                     "graph_schema": self.graph.get_schema,
                 }
             )
-            if "verified_gq" in verify_response:
+            if "verified_gql" in verify_response:
                 verified_gql = fix_gql_syntax(verify_response["verified_gql"])
                 intermediate_steps.append({"verified_gql": verified_gql})
             else:
