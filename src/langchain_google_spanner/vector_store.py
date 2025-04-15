@@ -440,7 +440,7 @@ class SpannerVectorStore(VectorStore):
         """
 
         embedding_config = list(
-            filter(lambda x: x.name == embedding_column, column_configs)
+            filter(lambda x: x.name == embedding_column, column_configs or [])
         )
         if embedding_column and len(embedding_config) > 0:
             config = embedding_config[0]
