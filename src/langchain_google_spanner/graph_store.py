@@ -935,12 +935,19 @@ class SpannerGraphSchema(object):
         )
         node_labels = {label for node in self.nodes.values() for label in node.labels}
         edge_labels = {label for edge in self.edges.values() for label in edge.labels}
-        edges_per_label: CaseInsensitiveDict[List[ElementSchema]] = CaseInsensitiveDict(
-            {}
-        )
+        Triplet = Tuple[ElementSchema, ElementSchema, ElementSchema]
+        triplets_per_label: CaseInsensitiveDict[List[Triplet]] = CaseInsensitiveDict({})
         for edge in self.edges.values():
             for label in edge.labels:
-                edges_per_label.setdefault(label, []).append(edge)
+                source_node = self.get_node_schema(edge.source.node_name)
+                target_node = self.get_node_schema(edge.target.node_name)
+                if source_node is None:
+                    raise ValueError(f"Source node {edge.source.node_name} not found")
+                if target_node is None:
+                    raise ValueError(f"Tource node {edge.target.node_name} not found")
+                triplets_per_label.setdefault(label, []).append(
+                    (source_node, edge, target_node)
+                )
         return json.dumps(
             {
                 "Name of graph": self.graph_name,
@@ -966,12 +973,12 @@ class SpannerGraphSchema(object):
                 },
                 "Possible edges per label": {
                     label: [
-                        "Edges from {} nodes to {} nodes".format(
-                            edge.source.node_name, edge.target.node_name
-                        )
-                        for edge in edges
+                        f"(:{source_node_label}) -[:{label}]-> (:{target_node_label})"
+                        for (source, edge, target) in triplets
+                        for source_node_label in source.labels
+                        for target_node_label in target.labels
                     ]
-                    for label, edges in edges_per_label.items()
+                    for label, triplets in triplets_per_label.items()
                 },
             },
             indent=2,

@@ -511,13 +511,13 @@ class TestSpannerGraphStore:
             assert len(schema["Node properties per node label"]["NodeB"]) == 3, schema[
                 "Node properties per node label"
             ]["NodB"]
-            assert len(schema["Possible edges per label"]["EdgeAB"]) == 1, schema[
+            assert len(schema["Possible edges per label"]["EdgeAB"]) == 4, schema[
                 "Possible edges per label"
             ]["EdgeAB"]
-            assert len(schema["Possible edges per label"]["EdgeBA"]) == 1, schema[
+            assert len(schema["Possible edges per label"]["EdgeBA"]) == 4, schema[
                 "Possible edges per label"
             ]["EdgeBA"]
-            assert len(schema["Possible edges per label"]["Edge"]) == 2, schema[
+            assert len(schema["Possible edges per label"]["Edge"]) == 8, schema[
                 "Possible edges per label"
             ]["Edge"]
         finally:
