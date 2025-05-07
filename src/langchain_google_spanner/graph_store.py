@@ -188,6 +188,10 @@ class ElementSchema(object):
 
     NODE_KEY_COLUMN_NAME: str = "id"
     TARGET_NODE_KEY_COLUMN_NAME: str = "target_id"
+
+    # Reserved column names when `use_flexible_schema` is true.
+    # Properties are stored in a JSON column named `properties`;
+    # Edge types are stored in a string column named `label`.
     DYNAMIC_PROPERTY_COLUMN_NAME: str = "properties"
     DYNAMIC_LABEL_COLUMN_NAME: str = "label"
 
@@ -973,7 +977,9 @@ class SpannerGraphSchema(object):
                 },
                 "Possible edges per label": {
                     label: [
-                        f"(:{source_node_label}) -[:{label}]-> (:{target_node_label})"
+                        "(:{}) -[:{}]-> (:{})".format(
+                            source_node_label, label, target_node_label
+                        )
                         for (source, edge, target) in triplets
                         for source_node_label in source.labels
                         for target_node_label in target.labels
