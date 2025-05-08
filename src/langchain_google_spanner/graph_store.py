@@ -1197,6 +1197,7 @@ class SpannerImpl(SpannerInterface):
         instance_id: str,
         database_id: str,
         client: Optional[spanner.Client] = None,
+        timeout: Optional[float] = None,
     ):
         """Initializes the Spanner implementation.
 
@@ -1208,11 +1209,14 @@ class SpannerImpl(SpannerInterface):
         self.client = client or spanner.Client()
         self.instance = self.client.instance(instance_id)
         self.database = self.instance.database(database_id)
+        self.timeout = timeout
 
     def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
         param_types = {k: TypeUtility.value_to_param_type(v) for k, v in params.items()}
         with self.database.snapshot() as snapshot:
-            rows = snapshot.execute_sql(query, params=params, param_types=param_types)
+            rows = snapshot.execute_sql(
+                query, params=params, param_types=param_types, timeout=self.timeout
+            )
             return [
                 {
                     column: value
@@ -1253,6 +1257,7 @@ class SpannerGraphStore(GraphStore):
         static_node_properties: List[str] = [],
         static_edge_properties: List[str] = [],
         impl: Optional[SpannerInterface] = None,
+        timeout: Optional[float] = None,
     ):
         """Initializes SpannerGraphStore.
 
@@ -1267,11 +1272,13 @@ class SpannerGraphStore(GraphStore):
           properties as static;
           static_edge_properties: in flexible schema, treat these edge
           properties as static.
+          timeout (Optional[float]): The timeout for queries in seconds.
         """
         self.impl = impl or SpannerImpl(
             instance_id,
             database_id,
             client_with_user_agent(client, USER_AGENT_GRAPH_STORE),
+            timeout=timeout,
         )
         self.schema = SpannerGraphSchema(
             graph_name,
