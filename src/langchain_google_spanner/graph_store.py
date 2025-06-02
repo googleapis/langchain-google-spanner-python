@@ -958,8 +958,8 @@ class SpannerGraphSchema(object):
                 "Node properties per node label": {
                     label: [
                         {
-                            "property name": name,
-                            "property type": properties[name],
+                            "name": name,
+                            "type": properties[name],
                         }
                         for name in self.labels[label].prop_names
                     ]
@@ -968,8 +968,8 @@ class SpannerGraphSchema(object):
                 "Edge properties per edge label": {
                     label: [
                         {
-                            "property name": name,
-                            "property type": properties[name],
+                            "name": name,
+                            "type": properties[name],
                         }
                         for name in self.labels[label].prop_names
                     ]
