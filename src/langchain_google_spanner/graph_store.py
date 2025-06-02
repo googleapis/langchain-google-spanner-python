@@ -961,9 +961,9 @@ class SpannerGraphSchema(object):
                             "property name": name,
                             "property type": properties[name],
                         }
-                        for name in self.labels[label].prop_names
+                        for name in sorted(self.labels[label].prop_names)
                     ]
-                    for label in node_labels
+                    for label in sorted(node_labels)
                 },
                 "Edge properties per edge label": {
                     label: [
@@ -971,9 +971,9 @@ class SpannerGraphSchema(object):
                             "property name": name,
                             "property type": properties[name],
                         }
-                        for name in self.labels[label].prop_names
+                        for name in sorted(self.labels[label].prop_names)
                     ]
-                    for label in edge_labels
+                    for label in sorted(edge_labels)
                 },
                 "Possible edges per label": {
                     label: [
