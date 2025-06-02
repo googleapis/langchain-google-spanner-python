@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.2...v0.9.0) (2025-06-02)
+
+
+### Features
+
+* Graph_name validation on graph store construction ([#162](https://github.com/googleapis/langchain-google-spanner-python/issues/162)) ([c753a74](https://github.com/googleapis/langchain-google-spanner-python/commit/c753a747f600582f14503d6ed29281a50f997b34))
+* **graph:** Handle cases when a single table is multiplexed by multi… ([#169](https://github.com/googleapis/langchain-google-spanner-python/issues/169)) ([f99c115](https://github.com/googleapis/langchain-google-spanner-python/commit/f99c1153901fddb6f5f28dba89c9a871910bd7db))
+
+
+### Bug Fixes
+
+* **graph:** 'verified_gql' exception ([9940b86](https://github.com/googleapis/langchain-google-spanner-python/commit/9940b86bb2c8a21961f6abf77612afc4c8168f77))
+
+
+### Documentation
+
+* Correct spelling of Spanner in README.rst ([#179](https://github.com/googleapis/langchain-google-spanner-python/issues/179)) ([a32aade](https://github.com/googleapis/langchain-google-spanner-python/commit/a32aade70a2b6029e7323ecf0498a4b0624e5f13))
+
 ## [0.8.2](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.1...v0.8.2) (2025-03-12)
 
 
