@@ -556,7 +556,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
         )
 
         docs = loader.load()
-        deleted = db.delete(documents=[docs[0], docs[1]])
+        deleted = db.delete(documents=docs)
 
         assert deleted
 
@@ -760,7 +760,7 @@ class TestSpannerVectorStorePGSQL:
 
         docs = loader.load()
 
-        deleted = db.delete(documents=[docs[0], docs[1]])
+        deleted = db.delete(documents=docs)
 
         assert deleted
 

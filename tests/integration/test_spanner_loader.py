@@ -35,7 +35,7 @@ def client() -> Client:
     return Client(project=project_id)
 
 
-@pytest.fixture()
+@pytest.fixture(scope="class")
 def cleanupGSQL(client):
     yield
 
@@ -53,7 +53,7 @@ def cleanupGSQL(client):
     print("\nGSQL Cleanup complete.")
 
 
-@pytest.fixture()
+@pytest.fixture(scope="class")
 def cleanupPGSQL(client):
     yield
 
