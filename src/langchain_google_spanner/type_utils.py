@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import base64
 import datetime
-from typing import Any
+from typing import Any, Optional
 
 from google.cloud.spanner_v1 import JsonObject, param_types
 
@@ -62,17 +62,19 @@ class TypeUtility(object):
             return "TIMESTAMP"
         if t.code == param_types.TypeCode.JSON:
             return "JSON"
+        if t.code == param_types.TypeCode.DATE:
+            return "DATE"
         raise ValueError("Unsupported type: %s" % t)
 
     @staticmethod
-    def schema_str_to_spanner_type(s: str) -> param_types.Type:
+    def schema_str_to_spanner_type(s: str) -> Optional[param_types.Type]:
         """Returns a Spanner type corresponding to the string representation from Spanner schema type.
 
         Parameters:
         - s: string representation of a Spanner schema type.
 
         Returns:
-        - Type[Any]: the corresponding Spanner type.
+        - Optional[param_types.Type]: the corresponding Spanner type.
         """
         if s == "BOOL":
             return param_types.BOOL
@@ -90,10 +92,16 @@ class TypeUtility(object):
             return param_types.TIMESTAMP
         if s == "JSON":
             return param_types.JSON
+        if s == "DATE":
+            return param_types.DATE
         if s.startswith("ARRAY<") and s.endswith(">"):
             return param_types.Array(
                 TypeUtility.schema_str_to_spanner_type(s[len("ARRAY<") : -len(">")])
             )
+        if s == "TOKENLIST":
+            # There is no corresponding type for TOKENLIST in value type yet.
+            # Returns none to allow TOKENLIST in the schema.
+            return None
         raise ValueError("Unsupported type: %s" % s)
 
     @staticmethod
@@ -118,6 +126,8 @@ class TypeUtility(object):
             return param_types.FLOAT64
         if isinstance(v, datetime.datetime):
             return param_types.TIMESTAMP
+        if isinstance(v, datetime.date):
+            return param_types.DATE
         if isinstance(v, JsonObject):
             return param_types.JSON
         if isinstance(v, list):
@@ -144,6 +154,8 @@ class TypeUtility(object):
         if isinstance(v, bytes):
             return base64.b64encode(v).decode("utf-8")
         if isinstance(v, datetime.datetime):
+            return str(v)
+        if isinstance(v, datetime.date):
             return str(v)
         if isinstance(v, JsonObject):
             return v

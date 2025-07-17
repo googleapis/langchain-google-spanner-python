@@ -14,6 +14,7 @@
 
 import base64
 import datetime
+import json
 import os
 import random
 import string
@@ -60,6 +61,10 @@ def random_timestamp():
     return datetime.datetime.fromtimestamp(random_int(0, 366 * 24 * 60 * 60 * 1000))
 
 
+def random_date():
+    return datetime.date.fromtimestamp(random_int(0, 366 * 24 * 60 * 60 * 1000))
+
+
 def random_param():
     # None param is not supported.
     return random.choice(random_generators())() or random_param()
@@ -86,6 +91,7 @@ def random_primitive_generators():
         random_bool,
         random_float,
         random_timestamp,
+        random_date,
     ]
 
 
@@ -394,4 +400,126 @@ class TestSpannerGraphStore:
         finally:
             print("Clean up graph with name `{}`".format(graph_name))
             graph.cleanup()
-            print("Actual results:", results)
+
+    @pytest.mark.parametrize(
+        "graph_name, raises_exception",
+        [
+            ("test_graph", False),
+            ("123test_graph", True),
+            ("test_graph2", False),
+            ("test-graph", True),
+        ],
+    )
+    def test_spanner_graph_invalid_graph_name(self, graph_name, raises_exception):
+        suffix = random_string(num_char=5, exclude_whitespaces=True)
+        graph_name += suffix
+        if raises_exception:
+            with pytest.raises(Exception) as excinfo:
+                SpannerGraphStore(
+                    instance_id,
+                    google_database,
+                    graph_name,
+                    client=Client(project=project_id),
+                    static_node_properties=["a", "b"],
+                    static_edge_properties=["a", "b"],
+                )
+            assert "not a valid identifier" in str(excinfo.value)
+        else:
+            SpannerGraphStore(
+                instance_id,
+                google_database,
+                graph_name,
+                client=Client(project=project_id),
+                static_node_properties=["a", "b"],
+                static_edge_properties=["a", "b"],
+            )
+
+    @pytest.mark.parametrize("use_flexible_schema", [False, True])
+    def test_spanner_graph_with_existing_graph(self, use_flexible_schema):
+        suffix = random_string(num_char=5, exclude_whitespaces=True)
+        graph_name = "test_graph{}".format(suffix)
+        node_table_name = "{}_node".format(graph_name)
+        edge_table_name = "{}_edge".format(graph_name)
+        graph = SpannerGraphStore(
+            instance_id,
+            google_database,
+            graph_name,
+            client=Client(project=project_id),
+            use_flexible_schema=use_flexible_schema,
+        )
+        graph.refresh_schema()
+        try:
+            graph.impl.apply_ddls(
+                [
+                    f"""
+                  CREATE TABLE IF NOT EXISTS {node_table_name} (
+                    id INT64 NOT NULL,
+                    str STRING(MAX),
+                    token TOKENLIST AS (TOKENIZE_FULLTEXT(str)) HIDDEN,
+                  ) PRIMARY KEY (id)
+                """,
+                    f"""
+                  CREATE TABLE IF NOT EXISTS {edge_table_name} (
+                    id INT64 NOT NULL,
+                    target_id INT64 NOT NULL,
+                  ) PRIMARY KEY (id, target_id)
+                """,
+                    f"""
+                  CREATE PROPERTY GRAPH IF NOT EXISTS {graph_name}
+                  NODE TABLES (
+                    {node_table_name} AS NodeA
+                      LABEL Node
+                      LABEL NodeA PROPERTIES(id, id AS node_a_id),
+                    {node_table_name} AS NodeB
+                      LABEL Node
+                      LABEL NodeB PROPERTIES(id, id AS node_b_id)
+                  )
+                  EDGE TABLES (
+                    {edge_table_name} AS EdgeAB
+                      SOURCE KEY(id) REFERENCES NodeA
+                      DESTINATION KEY(target_id) REFERENCES NodeB
+                      LABEL Edge PROPERTIES(id AS source_id, target_id AS dest_id)
+                      LABEL EdgeAB PROPERTIES(id AS node_a_id, target_id AS node_b_id),
+                    {edge_table_name} AS EdgeBA
+                      SOURCE KEY(id) REFERENCES NodeB
+                      DESTINATION KEY(target_id) REFERENCES NodeA
+                      LABEL Edge PROPERTIES(id AS source_id, target_id AS dest_id)
+                      LABEL EdgeBA PROPERTIES(target_id AS node_a_id, id AS node_b_id),
+                  )
+                """,
+                ]
+            )
+            graph.refresh_schema()
+            schema = json.loads(graph.get_schema)
+            edgeab = graph.schema.get_edge_schema("EdgeAB")
+            edgeba = graph.schema.get_edge_schema("EdgeBA")
+            assert (edgeab.source.node_name, edgeab.target.node_name) == (
+                "NodeA",
+                "NodeB",
+            )
+            assert (edgeba.source.node_name, edgeba.target.node_name) == (
+                "NodeB",
+                "NodeA",
+            )
+            # TOKENLIST-typed properties are ignored.
+            assert len(schema["Node properties per node label"]["Node"]) == 4, schema[
+                "Node properties per node label"
+            ]["Node"]
+            assert len(schema["Node properties per node label"]["NodeA"]) == 3, schema[
+                "Node properties per node label"
+            ]["NodeA"]
+            assert len(schema["Node properties per node label"]["NodeB"]) == 3, schema[
+                "Node properties per node label"
+            ]["NodB"]
+            assert len(schema["Possible edges per label"]["EdgeAB"]) == 4, schema[
+                "Possible edges per label"
+            ]["EdgeAB"]
+            assert len(schema["Possible edges per label"]["EdgeBA"]) == 4, schema[
+                "Possible edges per label"
+            ]["EdgeBA"]
+            assert len(schema["Possible edges per label"]["Edge"]) == 8, schema[
+                "Possible edges per label"
+            ]["Edge"]
+        finally:
+            print("Clean up graph with name `{}`".format(graph_name))
+            graph.cleanup()

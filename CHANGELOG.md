@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.8.2](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.1...v0.8.2) (2025-03-12)
+
+
+### Bug Fixes
+
+* **graph:** Minor tweek to the prompts ([#158](https://github.com/googleapis/langchain-google-spanner-python/issues/158)) ([35a6342](https://github.com/googleapis/langchain-google-spanner-python/commit/35a6342b333e0d307d58b2751b07ba775eebf4a5))
+* Handle unspecified column_configs for KNN ([#157](https://github.com/googleapis/langchain-google-spanner-python/issues/157)) ([2109892](https://github.com/googleapis/langchain-google-spanner-python/commit/2109892dfc0deac923fc413bf8527c588c61a3d6))
+
+
+### Documentation
+
+* **samples:** Provide an end to end notebook for graphrag using custom retrievers ([#159](https://github.com/googleapis/langchain-google-spanner-python/issues/159)) ([7ff3620](https://github.com/googleapis/langchain-google-spanner-python/commit/7ff362068288841e5c6f5cdb58038539022e75fe))
+
+## [0.8.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.0...v0.8.1) (2025-02-20)
+
+
+### Bug Fixes
+
+* **graph:** Allow property names with different cases ([#149](https://github.com/googleapis/langchain-google-spanner-python/issues/149)) ([37f2324](https://github.com/googleapis/langchain-google-spanner-python/commit/37f2324c37c83bcbbbeb7e04e34337c1d11edbe9))
+* **graph:** Support DATE type ([#150](https://github.com/googleapis/langchain-google-spanner-python/issues/150)) ([941e38e](https://github.com/googleapis/langchain-google-spanner-python/commit/941e38eece81612dfd42f7e5343e6f3691605fa9))
+
 ## [0.8.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.7.0...v0.8.0) (2025-02-07)
 
 

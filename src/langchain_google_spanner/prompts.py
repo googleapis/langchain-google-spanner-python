@@ -148,7 +148,7 @@ The verified gql fixes the path quantification syntax:
 """
 
 DEFAULT_GQL_VERIFY_TEMPLATE_PART0 = """
-Given a natual language question, Spanner Graph GQL graph query and a graph schema,
+Given a natural language question, Spanner Graph GQL graph query and a graph schema,
 validate the query.
 
 {verify_examples}
@@ -186,7 +186,7 @@ The error obtained when executing the query is
 ```
 {err_msg}
 ```
-Give me a correct version of the query.
+Return a modified version of the query which addresses the error message.
 Do not generate the same query as the input gql.
 """
 
@@ -219,7 +219,7 @@ DEFAULT_GQL_FIX_TEMPLATE = (
 
 SPANNERGRAPH_QA_TEMPLATE = """
 You are a helpful AI assistant.
-Create a human readable answer for the for the question.
+Create a human readable answer for the question.
 You should only use the information provided in the context and not use your internal knowledge.
 Don't add any information.
 Here is an example:
