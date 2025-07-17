@@ -38,14 +38,14 @@ Changelog = "https://github.com/googleapis/langchain-google-spanner-python/blob/
 lint = [
     "black[jupyter]==24.8.0",
     "flake8==6.1.0",
-    "isort==5.13.2",
+    "isort==6.0.0",
 ]
 
 test = [
     "black[jupyter]==24.8.0",
     "bs4==0.0.2",
     "flake8==6.1.0",
-    "isort==5.13.2",
+    "isort==6.0.0",
     "mypy==1.11.2",
     "pytest==8.3.3",
     "pytest-asyncio==0.24.0",
