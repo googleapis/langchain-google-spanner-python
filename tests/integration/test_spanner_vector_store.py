@@ -20,7 +20,7 @@ from typing import Dict
 
 import pytest
 from google.cloud.spanner import Client  # type: ignore
-from langchain_community.document_loaders import HNLoader
+from langchain_community.document_loaders import RecursiveUrlLoader
 from langchain_community.embeddings import FakeEmbeddings
 
 from langchain_google_spanner.vector_store import (  # type: ignore
@@ -245,11 +245,13 @@ class TestSpannerVectorStoreGoogleSQL_KNN:
             id_column="row_id",
             metadata_columns=[
                 TableColumn(name="metadata", type="JSON", is_null=True),
-                TableColumn(name="title", type="STRING(MAX)", is_null=False),
+                TableColumn(name="title", type="STRING(MAX)"),
             ],
         )
 
-        loader = HNLoader("https://news.ycombinator.com/item?id=34817881")
+        loader = RecursiveUrlLoader(
+            "https://news.ycombinator.com/item?id=1", max_depth=1
+        )
 
         embeddings = FakeEmbeddings(size=3)
 
@@ -327,7 +329,7 @@ class TestSpannerVectorStoreGoogleSQL_KNN:
 
         docs = loader.load()
 
-        deleted = db.delete(documents=[docs[0], docs[1]])
+        deleted = db.delete(documents=docs)
 
         assert deleted
 
@@ -459,7 +461,9 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
                 ],
             )
 
-        loader = HNLoader("https://news.ycombinator.com/item?id=34817881")
+        loader = RecursiveUrlLoader(
+            "https://news.ycombinator.com/item?id=1", max_depth=1
+        )
         embeddings = FakeEmbeddings(size=title_vector_size)
 
         def cleanup_db():
@@ -552,7 +556,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
         )
 
         docs = loader.load()
-        deleted = db.delete(documents=[docs[0], docs[1]])
+        deleted = db.delete(documents=docs)
 
         assert deleted
 
@@ -677,8 +681,9 @@ class TestSpannerVectorStorePGSQL:
             ],
         )
 
-        loader = HNLoader("https://news.ycombinator.com/item?id=34817881")
-
+        loader = RecursiveUrlLoader(
+            "https://news.ycombinator.com/item?id=1", max_depth=1
+        )
         embeddings = FakeEmbeddings(size=3)
 
         yield loader, embeddings
@@ -755,7 +760,7 @@ class TestSpannerVectorStorePGSQL:
 
         docs = loader.load()
 
-        deleted = db.delete(documents=[docs[0], docs[1]])
+        deleted = db.delete(documents=docs)
 
         assert deleted
 

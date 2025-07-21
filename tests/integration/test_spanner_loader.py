@@ -35,9 +35,41 @@ def client() -> Client:
     return Client(project=project_id)
 
 
+@pytest.fixture(scope="class")
+def cleanupGSQL(client):
+    yield
+
+    print("\nPerforming GSQL cleanup after each test...")
+
+    database = client.instance(instance_id).database(google_database)
+    operation = database.update_ddl(
+        [
+            f"DROP TABLE IF EXISTS {table_name}",
+        ]
+    )
+    operation.result(OPERATION_TIMEOUT_SECONDS)
+
+    # Code to perform teardown after each test goes here
+    print("\nGSQL Cleanup complete.")
+
+
+@pytest.fixture(scope="class")
+def cleanupPGSQL(client):
+    yield
+
+    print("\nPerforming PGSQL cleanup after each test...")
+
+    database = client.instance(instance_id).database(pg_database)
+    operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
+    operation.result(OPERATION_TIMEOUT_SECONDS)
+
+    # Code to perform teardown after each test goes here
+    print("\n PGSQL Cleanup complete.")
+
+
 class TestSpannerDocumentLoaderGoogleSQL:
     @pytest.fixture(autouse=True, scope="class")
-    def setup_database(self, client):
+    def setup_database(self, client, cleanupGSQL):
         database = client.instance(instance_id).database(google_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         operation.result(OPERATION_TIMEOUT_SECONDS)
@@ -455,7 +487,7 @@ class TestSpannerDocumentLoaderGoogleSQL:
 
 class TestSpannerDocumentLoaderPostgreSQL:
     @pytest.fixture(autouse=True, scope="class")
-    def setup_database(self, client):
+    def setup_database(self, client, cleanupPGSQL):
         database = client.instance(instance_id).database(pg_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         operation.result(OPERATION_TIMEOUT_SECONDS)
@@ -872,7 +904,7 @@ class TestSpannerDocumentLoaderPostgreSQL:
 
 class TestSpannerDocumentSaver:
     @pytest.fixture(name="google_client")
-    def setup_google_client(self, client) -> Client:
+    def setup_google_client(self, client, cleanupGSQL) -> Client:
         database = client.instance(instance_id).database(google_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         print("table dropped")
@@ -880,7 +912,7 @@ class TestSpannerDocumentSaver:
         yield client
 
     @pytest.fixture(name="pg_client")
-    def setup_pg_client(self, client) -> Client:
+    def setup_pg_client(self, client, cleanupPGSQL) -> Client:
         database = client.instance(instance_id).database(pg_database)
         operation = database.update_ddl([f"DROP TABLE IF EXISTS {table_name}"])
         operation.result(OPERATION_TIMEOUT_SECONDS)
