@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import base64
 import datetime
-from typing import Any
+from typing import Any, Optional
 
 from google.cloud.spanner_v1 import JsonObject, param_types
 
@@ -67,14 +67,14 @@ class TypeUtility(object):
         raise ValueError("Unsupported type: %s" % t)
 
     @staticmethod
-    def schema_str_to_spanner_type(s: str) -> param_types.Type:
+    def schema_str_to_spanner_type(s: str) -> Optional[param_types.Type]:
         """Returns a Spanner type corresponding to the string representation from Spanner schema type.
 
         Parameters:
         - s: string representation of a Spanner schema type.
 
         Returns:
-        - Type[Any]: the corresponding Spanner type.
+        - Optional[param_types.Type]: the corresponding Spanner type.
         """
         if s == "BOOL":
             return param_types.BOOL
@@ -98,6 +98,10 @@ class TypeUtility(object):
             return param_types.Array(
                 TypeUtility.schema_str_to_spanner_type(s[len("ARRAY<") : -len(">")])
             )
+        if s == "TOKENLIST":
+            # There is no corresponding type for TOKENLIST in value type yet.
+            # Returns none to allow TOKENLIST in the schema.
+            return None
         raise ValueError("Unsupported type: %s" % s)
 
     @staticmethod
