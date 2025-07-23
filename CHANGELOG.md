@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.9.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.2...v0.9.0) (2025-07-23)
+
+
+### Features
+
+* Graph_name validation on graph store construction ([#162](https://github.com/googleapis/langchain-google-spanner-python/issues/162)) ([c753a74](https://github.com/googleapis/langchain-google-spanner-python/commit/c753a747f600582f14503d6ed29281a50f997b34))
+* **graph:** Enable setting up the timeout for queries ([#178](https://github.com/googleapis/langchain-google-spanner-python/issues/178)) ([1c5cf19](https://github.com/googleapis/langchain-google-spanner-python/commit/1c5cf19f615fe85afbfb94fc30b1ff1112540f5b)), closes [#170](https://github.com/googleapis/langchain-google-spanner-python/issues/170)
+* **graph:** Handle cases when a single table is multiplexed by multi… ([#169](https://github.com/googleapis/langchain-google-spanner-python/issues/169)) ([f99c115](https://github.com/googleapis/langchain-google-spanner-python/commit/f99c1153901fddb6f5f28dba89c9a871910bd7db))
+* **graph:** Raise InvalidGQLGenerationError with intermediate_steps ([#175](https://github.com/googleapis/langchain-google-spanner-python/issues/175)) ([22f2158](https://github.com/googleapis/langchain-google-spanner-python/commit/22f215813785699c048b48dae33d69aa9b963e15)), closes [#178](https://github.com/googleapis/langchain-google-spanner-python/issues/178)
+
+
+### Bug Fixes
+
+* **graph:** 'verified_gql' exception ([9940b86](https://github.com/googleapis/langchain-google-spanner-python/commit/9940b86bb2c8a21961f6abf77612afc4c8168f77))
+* **graph:** Ensure intermediate_steps always show generated query ([#174](https://github.com/googleapis/langchain-google-spanner-python/issues/174)) ([d74f040](https://github.com/googleapis/langchain-google-spanner-python/commit/d74f0400075f56e9b43880d548a463a5e4ad44a3)), closes [#173](https://github.com/googleapis/langchain-google-spanner-python/issues/173)
+* **graph:** Optimize the size of the serialized schema ([#182](https://github.com/googleapis/langchain-google-spanner-python/issues/182)) ([51dba31](https://github.com/googleapis/langchain-google-spanner-python/commit/51dba31fa6b83d5a36ffa1d7f605fe1f01dd8786)), closes [#181](https://github.com/googleapis/langchain-google-spanner-python/issues/181)
+* **graph:** Sorts keys to make serialization determistic ([#184](https://github.com/googleapis/langchain-google-spanner-python/issues/184)) ([cc156f3](https://github.com/googleapis/langchain-google-spanner-python/commit/cc156f3c9ecc569f3792a12374d0fecfe9fed207)), closes [#183](https://github.com/googleapis/langchain-google-spanner-python/issues/183)
+
+
+### Documentation
+
+* Correct spelling of Spanner in README.rst ([#179](https://github.com/googleapis/langchain-google-spanner-python/issues/179)) ([a32aade](https://github.com/googleapis/langchain-google-spanner-python/commit/a32aade70a2b6029e7323ecf0498a4b0624e5f13))
+
 ## [0.8.2](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.1...v0.8.2) (2025-03-12)
 
 
