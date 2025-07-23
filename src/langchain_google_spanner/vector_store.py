@@ -1122,7 +1122,7 @@ class SpannerVectorStore(VectorStore):
         distance_alias = DISTANCE_SEARCH_QUERY_ALIAS
         sql = (
             f"SELECT {column_names}, {ann_strategy_name}("
-            + f"{embedding_column_type}{embedding}, {embedding_column_name}, options => JSON '"
+            + f"{embedding_column_type}'{[float(dimension) for dimension in embedding]}', {embedding_column_name}, options => JSON '"
             + ('{"num_leaves_to_search": %s}\') as %s\n' % (num_leaves, distance_alias))
             + f"FROM {table_name}"
             + "@{FORCE_INDEX="
