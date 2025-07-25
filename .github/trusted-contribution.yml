@@ -21,7 +21,6 @@ trustedContributors:
   - "renovate-bot"
   - "renovate[bot]"
   - "forking-renovate[bot]"
-  - "release-please[bot]"
 annotations:
   # Trigger Cloud Build tests
   - type: comment
