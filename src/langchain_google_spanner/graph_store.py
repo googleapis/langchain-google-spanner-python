@@ -1560,8 +1560,9 @@ class SpannerGraphStore(GraphStore):
             ]
         )
         self.schema = SpannerGraphSchema(
-            self.schema.graph_name, self.schema.use_flexible_schema,
+            self.schema.graph_name,
+            self.schema.use_flexible_schema,
             self.schema.static_node_properties,
             self.schema.static_edge_properties,
-            self.schema.json_schema
+            self.schema.json_schema,
         )
