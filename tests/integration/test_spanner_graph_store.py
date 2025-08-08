@@ -163,43 +163,50 @@ def random_graph_doc(suffix):
     )
 
 
+@pytest.fixture
+def setup_graph(request):
+    use_flexible_schema = request.getfixturevalue("use_flexible_schema")
+    include_json_schema = request.getfixturevalue("include_json_schema")
+    suffix = random_string(num_char=5, exclude_whitespaces=True)
+    graph_name = "test_graph{}".format(suffix)
+    graph = SpannerGraphStore(
+        instance_id,
+        google_database,
+        graph_name,
+        client=Client(project=project_id),
+        use_flexible_schema=use_flexible_schema,
+        static_node_properties=["a", "b"],
+        static_edge_properties=["a", "b"],
+        include_json_schema=include_json_schema,
+    )
+    graph.refresh_schema()
+
+    yield suffix, graph
+
+    print("Clean up graph with name `{}`".format(graph.graph_name))
+    graph.cleanup()
+
+
 class TestSpannerGraphStore:
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
-    def test_spanner_graph_random_doc(self, use_flexible_schema):
-        suffix = random_string(num_char=5, exclude_whitespaces=True)
-        graph_name = "test_graph{}".format(suffix)
-        graph = SpannerGraphStore(
-            instance_id,
-            google_database,
-            graph_name,
-            client=Client(project=project_id),
-            use_flexible_schema=use_flexible_schema,
-            static_node_properties=random_property_names(
-                random_int(l=0, u=len(properties))
-            ),
-            static_edge_properties=random_property_names(
-                random_int(l=0, u=len(properties))
-            ),
-        )
-        graph.refresh_schema()
+    @pytest.mark.parametrize("include_json_schema", [False, True])
+    def test_spanner_graph_random_doc(
+        self, setup_graph, use_flexible_schema, include_json_schema
+    ):
+        suffix, graph = setup_graph
+        node_ids = set()
+        edge_ids = set()
+        for _ in range(3):
+            graph_doc = random_graph_doc(suffix)
+            graph.add_graph_documents([graph_doc])
+            node_ids.update({(n.type, n.id) for n in graph_doc.nodes})
+            edge_ids.update(
+                {(e.type, e.source.id, e.target.id) for e in graph_doc.relationships}
+            )
+            graph.refresh_schema()
 
-        try:
-            node_ids = set()
-            edge_ids = set()
-            for _ in range(3):
-                graph_doc = random_graph_doc(suffix)
-                graph.add_graph_documents([graph_doc])
-                node_ids.update({(n.type, n.id) for n in graph_doc.nodes})
-                edge_ids.update(
-                    {
-                        (e.type, e.source.id, e.target.id)
-                        for e in graph_doc.relationships
-                    }
-                )
-                graph.refresh_schema()
-
-            results = graph.query(
-                """
+        results = graph.query(
+            """
           GRAPH {}
 
           MATCH ->
@@ -215,66 +222,41 @@ class TestSpannerGraphStore:
           RETURN type, num_elements, @param AS param
           ORDER BY type
           """.format(
-                    graph_name
-                ),
-                params={"param": random_param()},
-            )
-            assert len(results) == 2
-            assert results[0]["type"] == "edge", "Mismatch type"
-            assert results[0]["num_elements"] == len(
-                edge_ids
-            ), "Mismatch number of edges"
-            assert results[1]["type"] == "node", "Mismatch type"
-            assert results[1]["num_elements"] == len(
-                node_ids
-            ), "Mismatch number of nodes"
-
-        finally:
-            print("Clean up graph with name `{}`".format(graph_name))
-            print(graph.get_schema)
-            print(graph.get_structured_schema)
-            print(graph.get_ddl())
-            graph.cleanup()
+                graph.graph_name
+            ),
+            params={"param": random_param()},
+        )
+        assert len(results) == 2
+        assert results[0]["type"] == "edge", "Mismatch type"
+        assert results[0]["num_elements"] == len(edge_ids), "Mismatch number of edges"
+        assert results[1]["type"] == "node", "Mismatch type"
+        assert results[1]["num_elements"] == len(node_ids), "Mismatch number of nodes"
 
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
-    def test_spanner_graph_doc_with_duplicate_elements(self, use_flexible_schema):
-        suffix = random_string(num_char=5, exclude_whitespaces=True)
-        graph_name = "test_graph{}".format(suffix)
-        graph = SpannerGraphStore(
-            instance_id,
-            google_database,
-            graph_name,
-            client=Client(project=project_id),
-            use_flexible_schema=use_flexible_schema,
-            static_node_properties=random_property_names(
-                random_int(l=0, u=len(properties))
-            ),
-            static_edge_properties=random_property_names(
-                random_int(l=0, u=len(properties))
+    @pytest.mark.parametrize("include_json_schema", [False, True])
+    def test_spanner_graph_doc_with_duplicate_elements(
+        self, setup_graph, use_flexible_schema, include_json_schema
+    ):
+        suffix, graph = setup_graph
+        node0 = random_node("Node0{}".format(suffix))
+        node1 = random_node("Node1{}".format(suffix))
+        edge0 = random_edge("Edge01", node0, node1)
+        edge1 = random_edge("Edge01", node0, node1)
+
+        doc = GraphDocument(
+            nodes=[node0, node1, node0, node1],
+            relationships=[edge0, edge1],
+            source=Document(
+                page_content="Hello, world!",
+                metadata={"source": "https://example.com"},
             ),
         )
-        graph.refresh_schema()
+        graph.add_graph_documents([doc])
 
-        try:
-            node0 = random_node("Node0{}".format(suffix))
-            node1 = random_node("Node1{}".format(suffix))
-            edge0 = random_edge("Edge01", node0, node1)
-            edge1 = random_edge("Edge01", node0, node1)
-
-            doc = GraphDocument(
-                nodes=[node0, node1, node0, node1],
-                relationships=[edge0, edge1],
-                source=Document(
-                    page_content="Hello, world!",
-                    metadata={"source": "https://example.com"},
-                ),
-            )
-            graph.add_graph_documents([doc])
-
-            # In the case of flexible schema, `properties` is a nested json
-            # field.
-            results = graph.query(
-                """
+        # In the case of flexible schema, `properties` is a nested json
+        # field.
+        results = graph.query(
+            """
           GRAPH {}
 
           MATCH -[e]->
@@ -282,72 +264,55 @@ class TestSpannerGraphStore:
           RETURN COALESCE(properties.properties, JSON "{{}}") AS dynamic_properties,
                  properties AS static_properties
           """.format(
-                    graph_name
-                ),
-                params={"param": random_param()},
-            )
-            assert len(results) == 1
+                graph.graph_name
+            ),
+            params={"param": random_param()},
+        )
+        assert len(results) == 1
 
-            edge_properties = edge0.properties
-            edge_properties.update(edge1.properties)
-            missing_properties = set(edge_properties.keys()).difference(
-                set(results[0]["dynamic_properties"].keys()).union(
-                    set(results[0]["static_properties"].keys())
-                )
+        edge_properties = edge0.properties
+        edge_properties.update(edge1.properties)
+        missing_properties = set(edge_properties.keys()).difference(
+            set(results[0]["dynamic_properties"].keys()).union(
+                set(results[0]["static_properties"].keys())
             )
-            print(edge0.properties)
-            print(edge1.properties)
-            print(results)
-            assert (
-                len(missing_properties) == 0
-            ), "Missing properties of edge: {}".format(missing_properties)
-
-        finally:
-            print("Clean up graph with name `{}`".format(graph_name))
-            graph.cleanup()
+        )
+        assert len(missing_properties) == 0, "Missing properties of edge: {}".format(
+            missing_properties
+        )
 
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
-    def test_spanner_graph_avoid_unnecessary_overwrite(self, use_flexible_schema):
-        suffix = random_string(num_char=5, exclude_whitespaces=True)
-        graph_name = "test_graph{}".format(suffix)
-        graph = SpannerGraphStore(
-            instance_id,
-            google_database,
-            graph_name,
-            client=Client(project=project_id),
-            use_flexible_schema=use_flexible_schema,
-            static_node_properties=["a", "b"],
-            static_edge_properties=["a", "b"],
+    @pytest.mark.parametrize("include_json_schema", [False, True])
+    def test_spanner_graph_avoid_unnecessary_overwrite(
+        self, setup_graph, use_flexible_schema, include_json_schema
+    ):
+        suffix, graph = setup_graph
+        node0 = Node(
+            id=random_string(),
+            type="Node{}".format(suffix),
+            properties={"a": 1, "b": 1},
         )
-        graph.refresh_schema()
+        node1 = Node(
+            id=random_string(),
+            type="Node{}".format(suffix),
+            properties={"a": 1, "b": 1},
+        )
+        edge0 = Relationship(
+            source=node0,
+            target=node1,
+            type="Edge{}".format(suffix),
+            properties={"a": 1, "b": 1},
+        )
+        doc = GraphDocument(
+            nodes=[node0, node1],
+            relationships=[edge0],
+            source=Document(
+                page_content="Hello, world!",
+                metadata={"source": "https://example.com"},
+            ),
+        )
 
-        try:
-            node0 = Node(
-                id=random_string(),
-                type="Node{}".format(suffix),
-                properties={"a": 1, "b": 1},
-            )
-            node1 = Node(
-                id=random_string(),
-                type="Node{}".format(suffix),
-                properties={"a": 1, "b": 1},
-            )
-            edge0 = Relationship(
-                source=node0,
-                target=node1,
-                type="Edge{}".format(suffix),
-                properties={"a": 1, "b": 1},
-            )
-            doc = GraphDocument(
-                nodes=[node0, node1],
-                relationships=[edge0],
-                source=Document(
-                    page_content="Hello, world!",
-                    metadata={"source": "https://example.com"},
-                ),
-            )
-
-            query = """GRAPH {}
+        query = """GRAPH {}
                    MATCH (n {{id: @nodeId}})
                    LET properties = TO_JSON(n)['properties']
                    RETURN int64(properties.a) AS a, int64(properties.b) AS b
@@ -356,50 +321,35 @@ class TestSpannerGraphStore:
                    LET properties = TO_JSON(e)['properties']
                    RETURN int64(properties.a) AS a, int64(properties.b) AS b
                 """.format(
-                graph_name
-            )
-            graph.add_graph_documents([doc])
+            graph.graph_name
+        )
+        graph.add_graph_documents([doc])
 
-            # Test initial value: a=1, b=1
-            results = graph.query(query, {"nodeId": node0.id})
-            assert len(results) == 2, "Actual results: {}".format(results)
-            assert all((r["a"] == 1 for r in results)), "Actual results: {}".format(
-                results
-            )
-            assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(
-                results
-            )
+        # Test initial value: a=1, b=1
+        results = graph.query(query, {"nodeId": node0.id})
+        assert len(results) == 2, "Actual results: {}".format(results)
+        assert all((r["a"] == 1 for r in results)), "Actual results: {}".format(results)
+        assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(results)
 
-            node0.properties["a"] = 2
-            edge0.properties["a"] = 2
-            graph.add_graph_documents([doc])
+        node0.properties["a"] = 2
+        edge0.properties["a"] = 2
+        graph.add_graph_documents([doc])
 
-            # Test value after first overwrite: a=2, b=1
-            results = graph.query(query, {"nodeId": node0.id})
-            assert len(results) == 2, "Actual results: {}".format(results)
-            assert all((r["a"] == 2 for r in results)), "Actual results: {}".format(
-                results
-            )
-            assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(
-                results
-            )
+        # Test value after first overwrite: a=2, b=1
+        results = graph.query(query, {"nodeId": node0.id})
+        assert len(results) == 2, "Actual results: {}".format(results)
+        assert all((r["a"] == 2 for r in results)), "Actual results: {}".format(results)
+        assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(results)
 
-            node0.properties = {}
-            edge0.properties = {}
-            graph.add_graph_documents([doc])
+        node0.properties = {}
+        edge0.properties = {}
+        graph.add_graph_documents([doc])
 
-            # Test value after second overwrite: a=2, b=1
-            results = graph.query(query, {"nodeId": node0.id})
-            assert len(results) == 2, "Actual results: {}".format(results)
-            assert all((r["a"] == 2 for r in results)), "Actual results: {}".format(
-                results
-            )
-            assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(
-                results
-            )
-        finally:
-            print("Clean up graph with name `{}`".format(graph_name))
-            graph.cleanup()
+        # Test value after second overwrite: a=2, b=1
+        results = graph.query(query, {"nodeId": node0.id})
+        assert len(results) == 2, "Actual results: {}".format(results)
+        assert all((r["a"] == 2 for r in results)), "Actual results: {}".format(results)
+        assert all((r["b"] == 1 for r in results)), "Actual results: {}".format(results)
 
     @pytest.mark.parametrize(
         "graph_name, raises_exception",
@@ -435,36 +385,30 @@ class TestSpannerGraphStore:
             )
 
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
-    def test_spanner_graph_with_existing_graph(self, use_flexible_schema):
-        suffix = random_string(num_char=5, exclude_whitespaces=True)
-        graph_name = "test_graph{}".format(suffix)
+    @pytest.mark.parametrize("include_json_schema", [False, True])
+    def test_spanner_graph_with_existing_graph(
+        self, setup_graph, use_flexible_schema, include_json_schema
+    ):
+        suffix, graph = setup_graph
+        graph_name = graph.graph_name
         node_table_name = "{}_node".format(graph_name)
         edge_table_name = "{}_edge".format(graph_name)
-        graph = SpannerGraphStore(
-            instance_id,
-            google_database,
-            graph_name,
-            client=Client(project=project_id),
-            use_flexible_schema=use_flexible_schema,
-        )
-        graph.refresh_schema()
-        try:
-            graph.impl.apply_ddls(
-                [
-                    f"""
+        graph.impl.apply_ddls(
+            [
+                f"""
                   CREATE TABLE IF NOT EXISTS {node_table_name} (
                     id INT64 NOT NULL,
                     str STRING(MAX),
                     token TOKENLIST AS (TOKENIZE_FULLTEXT(str)) HIDDEN,
                   ) PRIMARY KEY (id)
                 """,
-                    f"""
+                f"""
                   CREATE TABLE IF NOT EXISTS {edge_table_name} (
                     id INT64 NOT NULL,
                     target_id INT64 NOT NULL,
                   ) PRIMARY KEY (id, target_id)
                 """,
-                    f"""
+                f"""
                   CREATE PROPERTY GRAPH IF NOT EXISTS {graph_name}
                   NODE TABLES (
                     {node_table_name} AS NodeA
@@ -487,39 +431,101 @@ class TestSpannerGraphStore:
                       LABEL EdgeBA PROPERTIES(target_id AS node_a_id, id AS node_b_id),
                   )
                 """,
-                ]
-            )
-            graph.refresh_schema()
-            schema = json.loads(graph.get_schema)
-            edgeab = graph.schema.get_edge_schema("EdgeAB")
-            edgeba = graph.schema.get_edge_schema("EdgeBA")
-            assert (edgeab.source.node_name, edgeab.target.node_name) == (
-                "NodeA",
-                "NodeB",
-            )
-            assert (edgeba.source.node_name, edgeba.target.node_name) == (
-                "NodeB",
-                "NodeA",
-            )
-            # TOKENLIST-typed properties are ignored.
-            assert len(schema["Node properties per node label"]["Node"]) == 4, schema[
-                "Node properties per node label"
-            ]["Node"]
-            assert len(schema["Node properties per node label"]["NodeA"]) == 3, schema[
-                "Node properties per node label"
-            ]["NodeA"]
-            assert len(schema["Node properties per node label"]["NodeB"]) == 3, schema[
-                "Node properties per node label"
-            ]["NodB"]
-            assert len(schema["Possible edges per label"]["EdgeAB"]) == 4, schema[
-                "Possible edges per label"
-            ]["EdgeAB"]
-            assert len(schema["Possible edges per label"]["EdgeBA"]) == 4, schema[
-                "Possible edges per label"
-            ]["EdgeBA"]
-            assert len(schema["Possible edges per label"]["Edge"]) == 8, schema[
-                "Possible edges per label"
-            ]["Edge"]
-        finally:
-            print("Clean up graph with name `{}`".format(graph_name))
-            graph.cleanup()
+            ]
+        )
+        graph.refresh_schema()
+        schema = json.loads(graph.get_schema)
+        edgeab = graph.schema.get_edge_schema("EdgeAB")
+        edgeba = graph.schema.get_edge_schema("EdgeBA")
+        assert (edgeab.source.node_name, edgeab.target.node_name) == (
+            "NodeA",
+            "NodeB",
+        )
+        assert (edgeba.source.node_name, edgeba.target.node_name) == (
+            "NodeB",
+            "NodeA",
+        )
+        # TOKENLIST-typed properties are ignored.
+        assert len(schema["Node properties per node label"]["Node"]) == 4, schema[
+            "Node properties per node label"
+        ]["Node"]
+        assert len(schema["Node properties per node label"]["NodeA"]) == 3, schema[
+            "Node properties per node label"
+        ]["NodeA"]
+        assert len(schema["Node properties per node label"]["NodeB"]) == 3, schema[
+            "Node properties per node label"
+        ]["NodB"]
+        assert len(schema["Possible edges per label"]["EdgeAB"]) == 4, schema[
+            "Possible edges per label"
+        ]["EdgeAB"]
+        assert len(schema["Possible edges per label"]["EdgeBA"]) == 4, schema[
+            "Possible edges per label"
+        ]["EdgeBA"]
+        assert len(schema["Possible edges per label"]["Edge"]) == 8, schema[
+            "Possible edges per label"
+        ]["Edge"]
+
+    @pytest.mark.parametrize("use_flexible_schema", [False, True])
+    @pytest.mark.parametrize("include_json_schema", [True])
+    def test_spanner_graph_schema_with_json(
+        self, setup_graph, use_flexible_schema, include_json_schema
+    ):
+        suffix, graph = setup_graph
+        node0 = Node(
+            id=random_string(),
+            type="Node0{}".format(suffix),
+            properties={"j0": random_json()},
+        )
+        node1 = Node(
+            id=random_string(),
+            type="Node1{}".format(suffix),
+            properties={"j1": random_json()},
+        )
+
+        edge = Relationship(
+            source=node0, target=node1, type="Edge", properties={"j": random_json()}
+        )
+
+        doc = GraphDocument(
+            nodes=[node0, node1],
+            relationships=[edge],
+            source=Document(
+                page_content="Hello, world!",
+                metadata={"source": "https://example.com"},
+            ),
+        )
+        graph.add_graph_documents([doc])
+        schema = json.loads(graph.get_schema)
+        if use_flexible_schema:
+            node_json_fields = [
+                [f["key"] for f in p["json_fields"]]
+                for p in schema["Node properties per node label"]["NODE"]
+                if "json_fields" in p
+            ]
+            edge_json_fields = [
+                [f["key"] for f in p["json_fields"]]
+                for p in schema["Edge properties per edge label"]["EDGE"]
+                if "json_fields" in p
+            ]
+            assert node_json_fields in ([["j0"]], [["j1"]]), schema
+            assert edge_json_fields == [["j"]], schema
+        else:
+            node0_json_fields = [
+                [f["key"] for f in p["json_fields"]]
+                for p in schema["Node properties per node label"][node0.type]
+                if "json_fields" in p
+            ]
+            node1_json_fields = [
+                [f["key"] for f in p["json_fields"]]
+                for p in schema["Node properties per node label"][node1.type]
+                if "json_fields" in p
+            ]
+            edge_json_fields = [
+                [f["key"] for f in p["json_fields"]]
+                for edge in schema["Edge properties per edge label"].values()
+                for p in edge
+                if "json_fields" in p
+            ]
+            assert node0_json_fields == [list(node0.properties["j0"].keys())]
+            assert node1_json_fields == [list(node1.properties["j1"].keys())]
+            assert edge_json_fields == [list(edge.properties["j"].keys())]

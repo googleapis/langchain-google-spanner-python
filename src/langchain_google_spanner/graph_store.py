@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import string
 from abc import ABC, abstractmethod
@@ -34,6 +35,8 @@ DEFAULT_DDL_TIMEOUT = 300
 NODE_KIND = "NODE"
 EDGE_KIND = "EDGE"
 USER_AGENT_GRAPH_STORE = "langchain-google-spanner-python:graphstore/" + __version__
+
+logger = logging.getLogger(__name__)
 
 
 class NodeWrapper(object):
@@ -763,6 +766,69 @@ class NodeReference(object):
         self.edge_keys = edge_keys
 
 
+class JsonSchema(object):
+    NODE_JSON_PROPERTY_QUERY_TEMPLATE = """
+    GRAPH `{graph_id}`
+    MATCH (n:`{label_name}`)
+    WHERE n.`{property_name}` IS NOT NULL
+    LET j = n.`{property_name}`
+    LIMIT 1
+    LET keys = JSON_KEYS(j, 1)
+    FOR key IN keys
+    LET v = j[key]
+    LET type = json_type(v)
+    RETURN key, type
+    """
+
+    EDGE_JSON_PROPERTY_QUERY_TEMPLATE = """
+    GRAPH `{graph_id}`
+    MATCH -[n:`{label_name}`]->
+    WHERE n.`{property_name}` IS NOT NULL
+    LET j = n.`{property_name}`
+    LIMIT 1
+    LET keys = JSON_KEYS(j, 1)
+    FOR key IN keys
+    LET v = j[key]
+    let type = json_type(v)
+    RETURN key, type
+    """
+
+    def __init__(self, graph_name: str, impl: SpannerInterface):
+        self._graph_name = graph_name
+        self._impl = impl
+
+    def get_node_json_property_schema(self, node_label: str, property_names: List[str]):
+        return self._get_label_json_property_schema(
+            node_label, property_names, self.NODE_JSON_PROPERTY_QUERY_TEMPLATE
+        )
+
+    def get_edge_json_property_schema(self, edge_label: str, property_names: List[str]):
+        return self._get_label_json_property_schema(
+            edge_label, property_names, self.EDGE_JSON_PROPERTY_QUERY_TEMPLATE
+        )
+
+    def _get_label_json_property_schema(
+        self, label: str, property_names: List[str], query_template: str
+    ):
+        if len(property_names) == 0:
+            return CaseInsensitiveDict({})
+        return CaseInsensitiveDict(
+            {
+                pname: [
+                    row
+                    for row in self._impl.query(
+                        query_template.format(
+                            graph_id=self._graph_name,
+                            label_name=label,
+                            property_name=pname,
+                        )
+                    )
+                ]
+                for pname in property_names
+            }
+        )
+
+
 class SpannerGraphSchema(object):
     """Schema representation of a property graph."""
 
@@ -778,6 +844,7 @@ class SpannerGraphSchema(object):
         use_flexible_schema: bool,
         static_node_properties: List[str] = [],
         static_edge_properties: List[str] = [],
+        json_schema: Optional[JsonSchema] = None,
     ):
         """Initializes the graph schema.
 
@@ -805,9 +872,16 @@ class SpannerGraphSchema(object):
         self.edge_tables: CaseInsensitiveDict[ElementSchema] = CaseInsensitiveDict({})
         self.labels: CaseInsensitiveDict[Label] = CaseInsensitiveDict({})
         self.properties: CaseInsensitiveDict[param_types.Type] = CaseInsensitiveDict({})
+        self.node_json_property_schema: CaseInsensitiveDict[Dict] = CaseInsensitiveDict(
+            {}
+        )
+        self.edge_json_property_schema: CaseInsensitiveDict[Dict] = CaseInsensitiveDict(
+            {}
+        )
         self.use_flexible_schema = use_flexible_schema
         self.static_node_properties = set(static_node_properties)
         self.static_edge_properties = set(static_edge_properties)
+        self.json_schema = json_schema
 
     def evolve(self, graph_documents: List[GraphDocument]) -> List[str]:
         """Evolves current schema into a schema representing the input documents.
@@ -861,11 +935,13 @@ class SpannerGraphSchema(object):
             node_schema = ElementSchema.from_info_schema(node, decl_by_types)
             self._update_node_schema(node_schema)
             self._update_labels_and_properties(node_schema)
+            self._update_json_property_schema(node_schema)
 
         for edge in info_schema.get("edgeTables", []):
             edge_schema = ElementSchema.from_info_schema(edge, decl_by_types)
             self._update_edge_schema(edge_schema)
             self._update_labels_and_properties(edge_schema)
+            self._update_json_property_schema(edge_schema)
 
     def node_type_name(self, name: str) -> str:
         return NODE_KIND if self.use_flexible_schema else name
@@ -952,26 +1028,36 @@ class SpannerGraphSchema(object):
                 triplets_per_label.setdefault(label, []).append(
                     (source_node, edge, target_node)
                 )
+
+        def repr_property(lname, pname, ptype, json_fields):
+            if not json_fields:
+                return {"name": pname, "type": ptype}
+            return {"name": pname, "type": ptype, "json_fields": json_fields}
+
         return json.dumps(
             {
                 "Name of graph": self.graph_name,
                 "Node properties per node label": {
                     label: [
-                        {
-                            "name": name,
-                            "type": properties[name],
-                        }
-                        for name in sorted(self.labels[label].prop_names)
+                        repr_property(
+                            label,
+                            pname,
+                            properties[pname],
+                            self.node_json_property_schema.get(label, {}).get(pname),
+                        )
+                        for pname in sorted(self.labels[label].prop_names)
                     ]
                     for label in sorted(node_labels)
                 },
                 "Edge properties per edge label": {
                     label: [
-                        {
-                            "name": name,
-                            "type": properties[name],
-                        }
-                        for name in sorted(self.labels[label].prop_names)
+                        repr_property(
+                            label,
+                            pname,
+                            properties[pname],
+                            self.edge_json_property_schema.get(label, {}).get(pname),
+                        )
+                        for pname in sorted(self.labels[label].prop_names)
                     ]
                     for label in sorted(edge_labels)
                 },
@@ -1124,6 +1210,37 @@ class SpannerGraphSchema(object):
         self.edges[edge_schema.name] = old_schema or edge_schema
         return ddls
 
+    def _update_json_property_schema(self, element_schema: ElementSchema) -> None:
+        if self.json_schema is None:
+            return
+        if len(element_schema.labels) == 0:
+            return
+        lname = element_schema.labels[0]
+        if element_schema.kind == NODE_KIND:
+            json_property_schema = self.json_schema.get_node_json_property_schema(
+                lname,
+                [
+                    pname
+                    for pname, ptype in element_schema.types.items()
+                    if ptype == param_types.JSON
+                ],
+            )
+            self.node_json_property_schema.update(
+                {l: json_property_schema for l in element_schema.labels}
+            )
+        else:
+            json_property_schema = self.json_schema.get_edge_json_property_schema(
+                lname,
+                [
+                    pname
+                    for pname, ptype in element_schema.types.items()
+                    if ptype == param_types.JSON
+                ],
+            )
+            self.edge_json_property_schema.update(
+                {l: json_property_schema for l in element_schema.labels}
+            )
+
     def _update_labels_and_properties(self, element_schema: ElementSchema) -> None:
         """Updates labels and properties based on an element schema.
 
@@ -1176,7 +1293,6 @@ class SpannerGraphSchema(object):
         """
         edge_schema = self.get_edge_schema(self.edge_type_name(name))
         if edge_schema is None:
-            print(list(self.edges.keys()))
             raise ValueError("Unknown edge schema `%s`" % name)
         for v in edge_schema.add_edges(name, edges):
             yield v
@@ -1265,7 +1381,7 @@ class SpannerImpl(SpannerInterface):
             return
 
         op = self.database.update_ddl(ddl_statements=ddls)
-        print("Waiting for DDL operations to complete...")
+        logger.info("Waiting for DDL operations to complete...")
         return op.result(options.get("timeout", DEFAULT_DDL_TIMEOUT))
 
     def insert_or_update(
@@ -1291,6 +1407,7 @@ class SpannerGraphStore(GraphStore):
         static_edge_properties: List[str] = [],
         impl: Optional[SpannerInterface] = None,
         timeout: Optional[float] = None,
+        include_json_schema: bool = False,
     ):
         """Initializes SpannerGraphStore.
 
@@ -1306,7 +1423,9 @@ class SpannerGraphStore(GraphStore):
           static_edge_properties: in flexible schema, treat these edge
           properties as static.
           timeout (Optional[float]): The timeout for queries in seconds.
+          include_json_schema (Optional[bool]): Whether to include json fields in the schema.
         """
+        self.graph_name = graph_name
         self.impl = impl or SpannerImpl(
             instance_id,
             database_id,
@@ -1318,6 +1437,9 @@ class SpannerGraphStore(GraphStore):
             use_flexible_schema,
             static_node_properties,
             static_edge_properties,
+            json_schema=(
+                JsonSchema(graph_name, self.impl) if include_json_schema else None
+            ),
         )
 
         self.refresh_schema()
@@ -1345,24 +1467,27 @@ class SpannerGraphStore(GraphStore):
         ddls = self.schema.evolve(graph_documents)
         if ddls:
             self.impl.apply_ddls(ddls)
-            self.refresh_schema()
         else:
-            print("No schema change required...")
+            logger.info("No schema change required...")
 
         nodes, edges = partition_graph_docs(graph_documents)
         for name, elements in nodes.items():
             if len(elements) == 0:
                 continue
             for table, columns, rows in self.schema.add_nodes(name, elements):
-                print("Insert nodes of type `{}`...".format(name))
+                logger.info("Insert nodes of type `{}`...".format(name))
                 self.impl.insert_or_update(table, columns, rows)
 
         for name, elements in edges.items():
             if len(elements) == 0:
                 continue
             for table, columns, rows in self.schema.add_edges(name, elements):
-                print("Insert edges of type `{}`...".format(name))
+                logger.info("Insert edges of type `{}`...".format(name))
                 self.impl.insert_or_update(table, columns, rows)
+
+        # Refresh schema after data insertion because json property is sampled
+        # over the actual data.
+        self.refresh_schema()
 
     def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
         """Query Spanner database.
@@ -1435,5 +1560,8 @@ class SpannerGraphStore(GraphStore):
             ]
         )
         self.schema = SpannerGraphSchema(
-            self.schema.graph_name, self.schema.use_flexible_schema
+            self.schema.graph_name, self.schema.use_flexible_schema,
+            self.schema.static_node_properties,
+            self.schema.static_edge_properties,
+            self.schema.json_schema
         )
