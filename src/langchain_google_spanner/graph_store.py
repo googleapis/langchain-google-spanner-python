@@ -19,7 +19,7 @@ import logging
 import re
 import string
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generator, Iterable, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, Set, Generator, Iterable, List, Mapping, Optional, Tuple, Union
 
 from google.cloud import spanner
 from google.cloud.spanner_v1 import JsonObject, param_types
@@ -208,11 +208,94 @@ class ElementSchema(object):
     source: NodeReference
     target: NodeReference
 
+    # DYNAMIC LABEL(<dynamic_label_expr>)
+    # DYNAMIC PROPERTIES(<dynamic_property_expr>)
+    dynamic_label_expr: Optional[str] = None
+    dynamic_property_expr: Optional[str] = None
+
+    # Cache of dynamically fetched labels and properties.
+    dynamic_schema: Optional[CaseInsensitiveDict[DynamicLabel]] = None
+    # Cache of dynamically fetched edge patterns.
+    dynamic_edge_patterns: Optional[List[Tuple[str, str, str]]] = None
+
     def is_dynamic_schema(self) -> bool:
         return (
-            self.types.get(ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME, None)
-            == param_types.JSON
+            self.dynamic_label_expr is not None
+            or self.dynamic_property_expr is not None
         )
+
+    def refresh_dynamic_schema(self, dynamic_schema_util: DynamicSchemaUtility):
+        if self.kind == NODE_KIND:
+            self.dynamic_schema = dynamic_schema_util.get_dynamic_node_schema(
+                self.labels
+            )
+        else:
+            self.dynamic_schema = dynamic_schema_util.get_dynamic_edge_schema(
+                self.labels
+            )
+            self.dynamic_edge_patterns = dynamic_schema_util.get_dynamic_edge_patterns(
+                self.labels
+            )
+
+    def get_label_and_properties(self, graph: SpannerGraphSchema):
+
+        def get_readable_property(pname, ptype, json_type=None):
+            prop = {
+                "name": pname,
+                "type": TypeUtility.spanner_type_to_schema_str(ptype),
+            }
+            # Dynamic properties will have json_types: this represents the
+            # underlying data type of the json value.
+            if json_type:
+                prop["json_type"] = json_type
+            return prop
+
+        if self.dynamic_schema:
+            return {
+                lname: [
+                    get_readable_property(
+                        pname, self.types.get(pname, param_types.JSON), ptype
+                    )
+                    for pname, ptype in label.properties
+                ]
+                for lname, label in self.dynamic_schema.items()
+                # Ignore static labels.
+                if lname not in self.labels
+            }
+        return {
+            label: [
+                get_readable_property(pname, self.types[pname])
+                for pname in sorted(graph.labels[label].prop_names)
+                if pname in self.types
+            ]
+            for label in sorted(self.labels)
+        }
+
+    def get_edge_patterns(self, graph: SpannerGraphSchema):
+        assert self.kind == EDGE_KIND
+        source = graph.get_node_schema(self.source.node_name)
+        assert source is not None
+        target = graph.get_node_schema(self.target.node_name)
+        assert target is not None
+        if self.dynamic_edge_patterns:
+            return [
+                (source_node_label, label, target_node_label)
+                for (
+                    source_node_label,
+                    label,
+                    target_node_label,
+                ) in self.dynamic_edge_patterns
+                # Ignore static labels.
+                if label not in self.labels
+                and source_node_label not in source.labels
+                and target_node_label not in target.labels
+            ]
+        return [
+            (source_node_label, label, target_node_label)
+            for label in sorted(self.labels)
+            for source_node_label in source.labels
+            for target_node_label in target.labels
+        ]
 
     @staticmethod
     def make_node_schema(
@@ -220,6 +303,8 @@ class ElementSchema(object):
         node_label: str,
         graph_name: str,
         property_types: CaseInsensitiveDict,
+        dynamic_label_expr: Optional[str] = None,
+        dynamic_property_expr: Optional[str] = None,
     ) -> ElementSchema:
         node = ElementSchema()
         node.types = property_types
@@ -229,6 +314,8 @@ class ElementSchema(object):
         node.name = node_type
         node.kind = NODE_KIND
         node.key_columns = [ElementSchema.NODE_KEY_COLUMN_NAME]
+        node.dynamic_label_expr = dynamic_label_expr
+        node.dynamic_property_expr = dynamic_property_expr
         return node
 
     @staticmethod
@@ -240,6 +327,8 @@ class ElementSchema(object):
         property_types: CaseInsensitiveDict,
         source_node_type: str,
         target_node_type: str,
+        dynamic_label_expr: Optional[str] = None,
+        dynamic_property_expr: Optional[str] = None,
     ) -> ElementSchema:
         edge = ElementSchema()
         edge.types = property_types
@@ -273,6 +362,8 @@ class ElementSchema(object):
             [ElementSchema.NODE_KEY_COLUMN_NAME],
             [ElementSchema.TARGET_NODE_KEY_COLUMN_NAME],
         )
+        edge.dynamic_label_expr = dynamic_label_expr
+        edge.dynamic_property_expr = dynamic_property_expr
         return edge
 
     @staticmethod
@@ -354,7 +445,12 @@ class ElementSchema(object):
             )
         )
         return ElementSchema.make_node_schema(
-            NODE_KIND, NODE_KIND, graph_schema.graph_name, types
+            NODE_KIND,
+            NODE_KIND,
+            graph_schema.graph_name,
+            types,
+            dynamic_label_expr=ElementSchema.DYNAMIC_LABEL_COLUMN_NAME,
+            dynamic_property_expr=ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME,
         )
 
     @staticmethod
@@ -471,6 +567,8 @@ class ElementSchema(object):
             types,
             edges[0].source.type,
             edges[0].target.type,
+            dynamic_label_expr=ElementSchema.DYNAMIC_LABEL_COLUMN_NAME,
+            dynamic_property_expr=ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME,
         )
 
     def add_nodes(
@@ -502,6 +600,19 @@ class ElementSchema(object):
             properties[ElementSchema.NODE_KEY_COLUMN_NAME] = node.id
 
             if self.is_dynamic_schema():
+                assert (
+                    self.dynamic_label_expr == ElementSchema.DYNAMIC_LABEL_COLUMN_NAME
+                ), "Require dynamic label expression to be %s: got %s" % (
+                    ElementSchema.DYNAMIC_LABEL_COLUMN_NAME,
+                    self.dynamic_label_expr,
+                )
+                assert (
+                    self.dynamic_property_expr ==
+                    ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME
+                ), "Require dynamic property expression to be %s: got %s" % (
+                    ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME,
+                    self.dynamic_property_expr,
+                )
                 dynamic_properties = {
                     k: TypeUtility.value_for_json(v)
                     for k, v in node.properties.items()
@@ -552,6 +663,19 @@ class ElementSchema(object):
             properties[ElementSchema.TARGET_NODE_KEY_COLUMN_NAME] = edge.target.id
 
             if self.is_dynamic_schema():
+                assert (
+                    self.dynamic_label_expr == ElementSchema.DYNAMIC_LABEL_COLUMN_NAME
+                ), "Require dynamic label expression to be %s: got %s" % (
+                    ElementSchema.DYNAMIC_LABEL_COLUMN_NAME,
+                    self.dynamic_label_expr,
+                )
+                assert (
+                    self.dynamic_property_expr ==
+                    ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME
+                ), "Require dynamic property expression to be %s: got %s" % (
+                    ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME,
+                    self.dynamic_property_expr,
+                )
                 dynamic_properties = {
                     k: TypeUtility.value_for_json(v)
                     for k, v in edge.properties.items()
@@ -621,6 +745,9 @@ class ElementSchema(object):
                 element_schema["destinationNodeTable"]["nodeTableColumns"],
                 element_schema["destinationNodeTable"]["edgeTableColumns"],
             )
+
+        element.dynamic_label_expr = element_schema.get("dynamicLabelExpr")
+        element.dynamic_property_expr = element_schema.get("dynamicPropertyExpr")
         return element
 
     def to_ddl(self, graph_schema: SpannerGraphSchema) -> str:
@@ -746,6 +873,11 @@ class ElementSchema(object):
         ]
         self.properties.update(new_schema.properties)
         self.types.update(new_schema.types)
+
+        self.dynamic_label_expr = new_schema.dynamic_label_expr
+        self.dynamic_property_expr = new_schema.dynamic_property_expr
+        self.dynamic_schema = new_schema.dynamic_schema
+        self.dynamic_edge_patterns = new_schema.dynamic_edge_patterns
         return ddls
 
 
@@ -755,6 +887,9 @@ class Label(object):
     def __init__(self, name: str, prop_names: set[str]):
         self.name = name
         self.prop_names = prop_names
+
+    def __repr__(self):
+        return f"Label({self.name}, {self.prop_names})"
 
 
 class NodeReference(object):
@@ -766,65 +901,108 @@ class NodeReference(object):
         self.edge_keys = edge_keys
 
 
-class JsonSchema(object):
-    NODE_JSON_PROPERTY_QUERY_TEMPLATE = """
+class DynamicLabel(object):
+    """Representation of a dynamic label."""
+
+    def __init__(self, name: str, properties: List[Tuple[str, str]]):
+        self.name = name
+        self.properties = properties
+
+
+class DynamicSchemaUtility(object):
+    """Utility class that dynamically fetches graph schema."""
+
+    # Sample a list of (label, properties) for nodes of static label_expr.
+    NODE_DYNAMIC_SCHEMA_QUERY_TEMPLATE = """
     GRAPH `{graph_id}`
-    MATCH (n:`{label_name}`)
-    WHERE n.`{property_name}` IS NOT NULL
-    LET j = n.`{property_name}`
-    LIMIT 1
-    LET keys = JSON_KEYS(j, 1)
-    FOR key IN keys
-    LET v = j[key]
-    LET type = json_type(v)
-    RETURN key, type
+    MATCH (n:{label_expr})
+    LET json = SAFE_TO_JSON(n).properties
+    FOR label IN LABELS(n)
+    RETURN label, ANY_VALUE(json) AS json
+    NEXT
+    LET json_fields = JSON_KEYS(json)
+    RETURN label, ARRAY {{
+      GRAPH `{graph_id}`
+      FOR field IN json_fields
+      FILTER json[field] IS NOT NULL
+      LET type = JSON_TYPE(json[field])
+      FILTER type != 'null'
+      RETURN STRUCT(field, type) AS field
+    }} AS properties
     """
 
-    EDGE_JSON_PROPERTY_QUERY_TEMPLATE = """
+    # Sample a list of (label, properties) for edges of static label_expr.
+    EDGE_DYNAMIC_SCHEMA_QUERY_TEMPLATE = """
     GRAPH `{graph_id}`
-    MATCH -[n:`{label_name}`]->
-    WHERE n.`{property_name}` IS NOT NULL
-    LET j = n.`{property_name}`
-    LIMIT 1
-    LET keys = JSON_KEYS(j, 1)
-    FOR key IN keys
-    LET v = j[key]
-    let type = json_type(v)
-    RETURN key, type
+    MATCH -[n:{label_expr}]->
+    LET json = SAFE_TO_JSON(n).properties
+    FOR label IN LABELS(n)
+    RETURN label, ANY_VALUE(json) AS json
+    NEXT
+    LET json_fields = JSON_KEYS(json)
+    RETURN label, ARRAY {{
+      GRAPH `{graph_id}`
+      FOR field IN json_fields
+      FILTER json[field] IS NOT NULL
+      LET type = JSON_TYPE(json[field])
+      FILTER type != 'null'
+      RETURN STRUCT(field, type) AS property
+      ORDER BY field
+    }} AS properties
+    ORDER BY label
+    """
+
+    # Find all (source_node_label, edge_label, target_node_label) triplets.
+    EDGE_PATTERN_QUERY_TEMPLATE = """
+    GRAPH `{graph_id}`
+    MATCH (src) -[n:{label_expr}]-> (dst)
+    FOR edge_label IN LABELS(n)
+    FOR src_label IN LABELS(src)
+    FOR dst_label IN LABELS(dst)
+    RETURN DISTINCT src_label, edge_label, dst_label
+    ORDER BY src_label, edge_label, dst_label
     """
 
     def __init__(self, graph_name: str, impl: SpannerInterface):
         self._graph_name = graph_name
         self._impl = impl
 
-    def get_node_json_property_schema(self, node_label: str, property_names: List[str]):
-        return self._get_label_json_property_schema(
-            node_label, property_names, self.NODE_JSON_PROPERTY_QUERY_TEMPLATE
-        )
+    @staticmethod
+    def make_label_expr(labels: List[str]) -> str:
+        return " & ".join([f"`{label}`" for label in labels])
 
-    def get_edge_json_property_schema(self, edge_label: str, property_names: List[str]):
-        return self._get_label_json_property_schema(
-            edge_label, property_names, self.EDGE_JSON_PROPERTY_QUERY_TEMPLATE
-        )
+    def get_dynamic_node_schema(self, labels: List[str]):
+        return self._get_dynamic_schema(labels, self.NODE_DYNAMIC_SCHEMA_QUERY_TEMPLATE)
 
-    def _get_label_json_property_schema(
-        self, label: str, property_names: List[str], query_template: str
-    ):
-        if len(property_names) == 0:
-            return CaseInsensitiveDict({})
+    def get_dynamic_edge_schema(self, labels: List[str]):
+        return self._get_dynamic_schema(labels, self.EDGE_DYNAMIC_SCHEMA_QUERY_TEMPLATE)
+
+    def _get_dynamic_schema(self, labels: List[str], query_template: str):
+        label_expr = self.make_label_expr(labels)
         return CaseInsensitiveDict(
             {
-                pname: [
-                    row
-                    for row in self._impl.query(
-                        query_template.format(
-                            graph_id=self._graph_name,
-                            label_name=label,
-                            property_name=pname,
-                        )
+                row["label"]: DynamicLabel(
+                    name=row["label"],
+                    properties=row["properties"],
+                )
+                for row in self._impl.query(
+                    query_template.format(
+                        graph_id=self._graph_name, label_expr=label_expr
                     )
-                ]
-                for pname in property_names
+                )
+            }
+        )
+
+    def get_dynamic_edge_patterns(self, labels: List[str]):
+        return set(
+            {
+                (row["src_label"], row["edge_label"], row["dst_label"])
+                for row in self._impl.query(
+                    self.EDGE_PATTERN_QUERY_TEMPLATE.format(
+                        graph_id=self._graph_name,
+                        label_expr=self.make_label_expr(labels),
+                    )
+                )
             }
         )
 
@@ -844,7 +1022,7 @@ class SpannerGraphSchema(object):
         use_flexible_schema: bool,
         static_node_properties: List[str] = [],
         static_edge_properties: List[str] = [],
-        json_schema: Optional[JsonSchema] = None,
+        dynamic_schema_util: Optional[DynamicSchemaUtility] = None,
     ):
         """Initializes the graph schema.
 
@@ -872,16 +1050,10 @@ class SpannerGraphSchema(object):
         self.edge_tables: CaseInsensitiveDict[ElementSchema] = CaseInsensitiveDict({})
         self.labels: CaseInsensitiveDict[Label] = CaseInsensitiveDict({})
         self.properties: CaseInsensitiveDict[param_types.Type] = CaseInsensitiveDict({})
-        self.node_json_property_schema: CaseInsensitiveDict[Dict] = CaseInsensitiveDict(
-            {}
-        )
-        self.edge_json_property_schema: CaseInsensitiveDict[Dict] = CaseInsensitiveDict(
-            {}
-        )
         self.use_flexible_schema = use_flexible_schema
         self.static_node_properties = set(static_node_properties)
         self.static_edge_properties = set(static_edge_properties)
-        self.json_schema = json_schema
+        self.dynamic_schema_util = dynamic_schema_util
 
     def evolve(self, graph_documents: List[GraphDocument]) -> List[str]:
         """Evolves current schema into a schema representing the input documents.
@@ -933,15 +1105,17 @@ class SpannerGraphSchema(object):
         )
         for node in info_schema["nodeTables"]:
             node_schema = ElementSchema.from_info_schema(node, decl_by_types)
+            if node_schema.is_dynamic_schema() and self.dynamic_schema_util:
+                node_schema.refresh_dynamic_schema(self.dynamic_schema_util)
             self._update_node_schema(node_schema)
             self._update_labels_and_properties(node_schema)
-            self._update_json_property_schema(node_schema)
 
         for edge in info_schema.get("edgeTables", []):
             edge_schema = ElementSchema.from_info_schema(edge, decl_by_types)
+            if edge_schema.is_dynamic_schema() and self.dynamic_schema_util:
+                edge_schema.refresh_dynamic_schema(self.dynamic_schema_util)
             self._update_edge_schema(edge_schema)
             self._update_labels_and_properties(edge_schema)
-            self._update_json_property_schema(edge_schema)
 
     def node_type_name(self, name: str) -> str:
         return NODE_KIND if self.use_flexible_schema else name
@@ -1007,73 +1181,36 @@ class SpannerGraphSchema(object):
         Returns:
           str: a string representation of the graph schema.
         """
-        properties = CaseInsensitiveDict(
-            {
-                k: TypeUtility.spanner_type_to_schema_str(v)
-                for k, v in self.properties.items()
-            }
-        )
-        node_labels = {label for node in self.nodes.values() for label in node.labels}
-        edge_labels = {label for edge in self.edges.values() for label in edge.labels}
-        Triplet = Tuple[ElementSchema, ElementSchema, ElementSchema]
-        triplets_per_label: CaseInsensitiveDict[List[Triplet]] = CaseInsensitiveDict({})
+        node_properties_per_label: Dict[str, Dict] = {}
+        edge_properties_per_label: Dict[str, Dict] = {}
+        edge_patterns_per_label: Dict[str, Set[str]] = {}
+        for node in self.nodes.values():
+            node_properties_per_label.update(
+                node.get_label_and_properties(self))
+
         for edge in self.edges.values():
-            for label in edge.labels:
-                source_node = self.get_node_schema(edge.source.node_name)
-                target_node = self.get_node_schema(edge.target.node_name)
-                if source_node is None:
-                    raise ValueError(f"Source node {edge.source.node_name} not found")
-                if target_node is None:
-                    raise ValueError(f"Tource node {edge.target.node_name} not found")
-                triplets_per_label.setdefault(label, []).append(
-                    (source_node, edge, target_node)
-                )
-
-        def repr_property(lname, pname, ptype, json_fields):
-            if not json_fields:
-                return {"name": pname, "type": ptype}
-            return {"name": pname, "type": ptype, "json_fields": json_fields}
-
+            edge_properties_per_label.update(
+                edge.get_label_and_properties(self))
+            for src_node_label, label, tgt_node_label in edge.get_edge_patterns(
+                    self):
+                edge_patterns_per_label.setdefault(label, set()).add(
+                    "(:{}) -[:{}]-> (:{})".format(src_node_label, label,
+                                                  tgt_node_label))
         return json.dumps(
             {
                 "Name of graph": self.graph_name,
-                "Node properties per node label": {
-                    label: [
-                        repr_property(
-                            label,
-                            pname,
-                            properties[pname],
-                            self.node_json_property_schema.get(label, {}).get(pname),
-                        )
-                        for pname in sorted(self.labels[label].prop_names)
-                    ]
-                    for label in sorted(node_labels)
-                },
-                "Edge properties per edge label": {
-                    label: [
-                        repr_property(
-                            label,
-                            pname,
-                            properties[pname],
-                            self.edge_json_property_schema.get(label, {}).get(pname),
-                        )
-                        for pname in sorted(self.labels[label].prop_names)
-                    ]
-                    for label in sorted(edge_labels)
-                },
-                "Possible edges per label": {
-                    label: [
-                        "(:{}) -[:{}]-> (:{})".format(
-                            source_node_label, label, target_node_label
-                        )
-                        for (source, edge, target) in triplets
-                        for source_node_label in source.labels
-                        for target_node_label in target.labels
-                    ]
-                    for label, triplets in triplets_per_label.items()
-                },
+                "Node properties per node label": dict(
+                    sorted(node_properties_per_label.items())
+                ),
+                "Edge properties per edge label": dict(
+                    sorted(edge_properties_per_label.items())
+                ),
+                "Possible edges per label": dict(
+                    sorted(edge_patterns_per_label.items())
+                ),
             },
             indent=2,
+            default=lambda s: sorted(s),
         )
 
     def to_ddl(self) -> str:
@@ -1105,12 +1242,17 @@ class SpannerGraphSchema(object):
             labels: CaseInsensitiveDict[Label],
             element: ElementSchema,
         ) -> str:
-            return "\n".join(
-                (
-                    construct_label_and_properties(target_label, labels, element)
-                    for target_label in target_labels
+            clauses = [
+                construct_label_and_properties(target_label, labels, element)
+                for target_label in target_labels
+            ]
+            if element.dynamic_label_expr:
+                clauses.append("DYNAMIC LABEL ({})".format(element.dynamic_label_expr))
+            if element.dynamic_property_expr:
+                clauses.append(
+                    "DYNAMIC PROPERTIES ({})".format(element.dynamic_property_expr)
                 )
-            )
+            return "\n".join(clauses)
 
         def construct_columns(cols: List[str]) -> str:
             return ", ".join(to_identifiers(cols))
@@ -1209,37 +1351,6 @@ class SpannerGraphSchema(object):
 
         self.edges[edge_schema.name] = old_schema or edge_schema
         return ddls
-
-    def _update_json_property_schema(self, element_schema: ElementSchema) -> None:
-        if self.json_schema is None:
-            return
-        if len(element_schema.labels) == 0:
-            return
-        lname = element_schema.labels[0]
-        if element_schema.kind == NODE_KIND:
-            json_property_schema = self.json_schema.get_node_json_property_schema(
-                lname,
-                [
-                    pname
-                    for pname, ptype in element_schema.types.items()
-                    if ptype == param_types.JSON
-                ],
-            )
-            self.node_json_property_schema.update(
-                {l: json_property_schema for l in element_schema.labels}
-            )
-        else:
-            json_property_schema = self.json_schema.get_edge_json_property_schema(
-                lname,
-                [
-                    pname
-                    for pname, ptype in element_schema.types.items()
-                    if ptype == param_types.JSON
-                ],
-            )
-            self.edge_json_property_schema.update(
-                {l: json_property_schema for l in element_schema.labels}
-            )
 
     def _update_labels_and_properties(self, element_schema: ElementSchema) -> None:
         """Updates labels and properties based on an element schema.
@@ -1407,7 +1518,6 @@ class SpannerGraphStore(GraphStore):
         static_edge_properties: List[str] = [],
         impl: Optional[SpannerInterface] = None,
         timeout: Optional[float] = None,
-        include_json_schema: bool = False,
     ):
         """Initializes SpannerGraphStore.
 
@@ -1423,7 +1533,6 @@ class SpannerGraphStore(GraphStore):
           static_edge_properties: in flexible schema, treat these edge
           properties as static.
           timeout (Optional[float]): The timeout for queries in seconds.
-          include_json_schema (Optional[bool]): Whether to include json fields in the schema.
         """
         self.graph_name = graph_name
         self.impl = impl or SpannerImpl(
@@ -1435,11 +1544,9 @@ class SpannerGraphStore(GraphStore):
         self.schema = SpannerGraphSchema(
             graph_name,
             use_flexible_schema,
-            static_node_properties,
-            static_edge_properties,
-            json_schema=(
-                JsonSchema(graph_name, self.impl) if include_json_schema else None
-            ),
+            static_node_properties=static_node_properties,
+            static_edge_properties=static_edge_properties,
+            dynamic_schema_util=DynamicSchemaUtility(graph_name, self.impl),
         )
 
         self.refresh_schema()
@@ -1564,5 +1671,5 @@ class SpannerGraphStore(GraphStore):
             self.schema.use_flexible_schema,
             self.schema.static_node_properties,
             self.schema.static_edge_properties,
-            self.schema.json_schema,
+            self.schema.dynamic_schema_util,
         )

@@ -102,7 +102,6 @@ def random_generators():
         + [random_none, random_json]
     )
 
-
 properties = [
     ("p{}".format(i), random_val_gen)
     for i, random_val_gen in enumerate(random_generators())
@@ -166,7 +165,6 @@ def random_graph_doc(suffix):
 @pytest.fixture
 def setup_graph(request):
     use_flexible_schema = request.getfixturevalue("use_flexible_schema")
-    include_json_schema = request.getfixturevalue("include_json_schema")
     suffix = random_string(num_char=5, exclude_whitespaces=True)
     graph_name = "test_graph{}".format(suffix)
     graph = SpannerGraphStore(
@@ -177,7 +175,6 @@ def setup_graph(request):
         use_flexible_schema=use_flexible_schema,
         static_node_properties=["a", "b"],
         static_edge_properties=["a", "b"],
-        include_json_schema=include_json_schema,
     )
     graph.refresh_schema()
 
@@ -189,9 +186,10 @@ def setup_graph(request):
 
 class TestSpannerGraphStore:
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
-    @pytest.mark.parametrize("include_json_schema", [False, True])
     def test_spanner_graph_random_doc(
-        self, setup_graph, use_flexible_schema, include_json_schema
+        self,
+        setup_graph,
+        use_flexible_schema,
     ):
         suffix, graph = setup_graph
         node_ids = set()
@@ -233,9 +231,10 @@ class TestSpannerGraphStore:
         assert results[1]["num_elements"] == len(node_ids), "Mismatch number of nodes"
 
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
-    @pytest.mark.parametrize("include_json_schema", [False, True])
     def test_spanner_graph_doc_with_duplicate_elements(
-        self, setup_graph, use_flexible_schema, include_json_schema
+        self,
+        setup_graph,
+        use_flexible_schema,
     ):
         suffix, graph = setup_graph
         node0 = random_node("Node0{}".format(suffix))
@@ -282,9 +281,10 @@ class TestSpannerGraphStore:
         )
 
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
-    @pytest.mark.parametrize("include_json_schema", [False, True])
     def test_spanner_graph_avoid_unnecessary_overwrite(
-        self, setup_graph, use_flexible_schema, include_json_schema
+        self,
+        setup_graph,
+        use_flexible_schema,
     ):
         suffix, graph = setup_graph
         node0 = Node(
@@ -385,9 +385,10 @@ class TestSpannerGraphStore:
             )
 
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
-    @pytest.mark.parametrize("include_json_schema", [False, True])
     def test_spanner_graph_with_existing_graph(
-        self, setup_graph, use_flexible_schema, include_json_schema
+        self,
+        setup_graph,
+        use_flexible_schema,
     ):
         suffix, graph = setup_graph
         graph_name = graph.graph_name
@@ -446,45 +447,91 @@ class TestSpannerGraphStore:
             "NodeA",
         )
         # TOKENLIST-typed properties are ignored.
-        assert len(schema["Node properties per node label"]["Node"]) == 4, schema[
-            "Node properties per node label"
-        ]["Node"]
-        assert len(schema["Node properties per node label"]["NodeA"]) == 3, schema[
-            "Node properties per node label"
-        ]["NodeA"]
-        assert len(schema["Node properties per node label"]["NodeB"]) == 3, schema[
-            "Node properties per node label"
-        ]["NodB"]
-        assert len(schema["Possible edges per label"]["EdgeAB"]) == 4, schema[
-            "Possible edges per label"
-        ]["EdgeAB"]
-        assert len(schema["Possible edges per label"]["EdgeBA"]) == 4, schema[
-            "Possible edges per label"
-        ]["EdgeBA"]
-        assert len(schema["Possible edges per label"]["Edge"]) == 8, schema[
-            "Possible edges per label"
-        ]["Edge"]
+        assert schema["Node properties per node label"]["Node"] == [
+            {
+                "name": "id",
+                "type": "INT64"
+            },
+            {
+                "name": "node_b_id",
+                "type": "INT64"
+            },
+            {
+                "name": "str",
+                "type": "STRING"
+            },
+        ], 'Invalid Node properties'
+        assert schema["Node properties per node label"]["NodeA"] == [
+            {
+                "name": "id",
+                "type": "INT64"
+            },
+            {
+                "name": "node_a_id",
+                "type": "INT64"
+            },
+            {
+                "name": "str",
+                "type": "STRING"
+            },
+        ], 'Invalid NodeA properties'
+        assert schema["Node properties per node label"]["NodeB"] == [
+            {
+                "name": "id",
+                "type": "INT64"
+            },
+            {
+                "name": "node_b_id",
+                "type": "INT64"
+            },
+            {
+                "name": "str",
+                "type": "STRING"
+            },
+        ], 'Invalid NodeB properties'
+        assert schema["Possible edges per label"]["EdgeAB"] == [
+            '(:Node) -[:EdgeAB]-> (:Node)',
+            '(:Node) -[:EdgeAB]-> (:NodeB)',
+            '(:NodeA) -[:EdgeAB]-> (:Node)',
+            '(:NodeA) -[:EdgeAB]-> (:NodeB)',
+        ], 'Invalid EdgeAB patterns'
+        assert schema["Possible edges per label"]["EdgeBA"] == [
+            '(:Node) -[:EdgeBA]-> (:Node)',
+            '(:Node) -[:EdgeBA]-> (:NodeA)',
+            '(:NodeB) -[:EdgeBA]-> (:Node)',
+            '(:NodeB) -[:EdgeBA]-> (:NodeA)',
+        ], 'Invalid EdgeBA patterns'
+        assert schema["Possible edges per label"]["Edge"] == [
+            '(:Node) -[:Edge]-> (:Node)',
+            '(:Node) -[:Edge]-> (:NodeA)',
+            '(:Node) -[:Edge]-> (:NodeB)',
+            '(:NodeA) -[:Edge]-> (:Node)',
+            '(:NodeA) -[:Edge]-> (:NodeB)',
+            '(:NodeB) -[:Edge]-> (:Node)',
+            '(:NodeB) -[:Edge]-> (:NodeA)',
+        ], 'Invalid Edge patterns'
 
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
-    @pytest.mark.parametrize("include_json_schema", [True])
-    def test_spanner_graph_schema_with_json(
-        self, setup_graph, use_flexible_schema, include_json_schema
+    def test_spanner_graph_schema_representation(
+        self,
+        setup_graph,
+        use_flexible_schema,
     ):
         suffix, graph = setup_graph
         node0 = Node(
             id=random_string(),
             type="Node0{}".format(suffix),
-            properties={"j0": random_json()},
+            properties={"j0": random_int()},
         )
         node1 = Node(
             id=random_string(),
             type="Node1{}".format(suffix),
-            properties={"j1": random_json()},
+            properties={"j1": random_string()},
         )
-
-        edge = Relationship(
-            source=node0, target=node1, type="Edge", properties={"j": random_json()}
-        )
+        edge = Relationship(source=node0,
+                            target=node1,
+                            type="Links",
+                            properties={"j": random_json()})
 
         doc = GraphDocument(
             nodes=[node0, node1],
@@ -496,36 +543,40 @@ class TestSpannerGraphStore:
         )
         graph.add_graph_documents([doc])
         schema = json.loads(graph.get_schema)
+        node0_json_fields = sorted([
+            p['name']
+            for p in schema["Node properties per node label"][node0.type]
+        ])
+        node1_json_fields = sorted([
+            p['name']
+            for p in schema["Node properties per node label"][node1.type]
+        ])
+        edge_json_fields = sorted([
+            p['name']
+            for edge in schema["Edge properties per edge label"].values()
+            for p in edge
+        ])
+        edge_patterns = sorted([
+            pattern
+            for edge in schema["Possible edges per label"].values()
+            for pattern in edge
+        ])
         if use_flexible_schema:
-            node_json_fields = [
-                [f["key"] for f in p["json_fields"]]
-                for p in schema["Node properties per node label"]["NODE"]
-                if "json_fields" in p
+            assert node0_json_fields == ['id', 'j0', 'label', 'properties']
+            assert node1_json_fields == ['id', 'j1', 'label', 'properties']
+            assert edge_json_fields == [
+                'id', 'j', 'label', 'properties', 'target_id'
             ]
-            edge_json_fields = [
-                [f["key"] for f in p["json_fields"]]
-                for p in schema["Edge properties per edge label"]["EDGE"]
-                if "json_fields" in p
+            assert edge_patterns == [
+                '(:{src}) -[:{edge}]-> (:{dst})'.format(src=node0.type,
+                                                        edge=edge.type,
+                                                        dst=node1.type)
             ]
-            assert node_json_fields in ([["j0"]], [["j1"]]), schema
-            assert edge_json_fields == [["j"]], schema
         else:
-            node0_json_fields = [
-                [f["key"] for f in p["json_fields"]]
-                for p in schema["Node properties per node label"][node0.type]
-                if "json_fields" in p
+            assert node0_json_fields == ['id', 'j0']
+            assert node1_json_fields == ['id', 'j1']
+            assert edge_json_fields == ['id', 'j', 'target_id']
+            assert edge_patterns == [
+                '(:{src}) -[:{src}_{edge}_{dst}]-> (:{dst})'.format(
+                    src=node0.type, edge=edge.type, dst=node1.type)
             ]
-            node1_json_fields = [
-                [f["key"] for f in p["json_fields"]]
-                for p in schema["Node properties per node label"][node1.type]
-                if "json_fields" in p
-            ]
-            edge_json_fields = [
-                [f["key"] for f in p["json_fields"]]
-                for edge in schema["Edge properties per edge label"].values()
-                for p in edge
-                if "json_fields" in p
-            ]
-            assert node0_json_fields == [list(node0.properties["j0"].keys())]
-            assert node1_json_fields == [list(node1.properties["j1"].keys())]
-            assert edge_json_fields == [list(edge.properties["j"].keys())]
