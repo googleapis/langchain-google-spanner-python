@@ -19,7 +19,18 @@ import logging
 import re
 import string
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Set, Generator, Iterable, List, Mapping, Optional, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from google.cloud import spanner
 from google.cloud.spanner_v1 import JsonObject, param_types
@@ -607,8 +618,8 @@ class ElementSchema(object):
                     self.dynamic_label_expr,
                 )
                 assert (
-                    self.dynamic_property_expr ==
-                    ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME
+                    self.dynamic_property_expr
+                    == ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME
                 ), "Require dynamic property expression to be %s: got %s" % (
                     ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME,
                     self.dynamic_property_expr,
@@ -670,8 +681,8 @@ class ElementSchema(object):
                     self.dynamic_label_expr,
                 )
                 assert (
-                    self.dynamic_property_expr ==
-                    ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME
+                    self.dynamic_property_expr
+                    == ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME
                 ), "Require dynamic property expression to be %s: got %s" % (
                     ElementSchema.DYNAMIC_PROPERTY_COLUMN_NAME,
                     self.dynamic_property_expr,
@@ -1185,17 +1196,14 @@ class SpannerGraphSchema(object):
         edge_properties_per_label: Dict[str, Dict] = {}
         edge_patterns_per_label: Dict[str, Set[str]] = {}
         for node in self.nodes.values():
-            node_properties_per_label.update(
-                node.get_label_and_properties(self))
+            node_properties_per_label.update(node.get_label_and_properties(self))
 
         for edge in self.edges.values():
-            edge_properties_per_label.update(
-                edge.get_label_and_properties(self))
-            for src_node_label, label, tgt_node_label in edge.get_edge_patterns(
-                    self):
+            edge_properties_per_label.update(edge.get_label_and_properties(self))
+            for src_node_label, label, tgt_node_label in edge.get_edge_patterns(self):
                 edge_patterns_per_label.setdefault(label, set()).add(
-                    "(:{}) -[:{}]-> (:{})".format(src_node_label, label,
-                                                  tgt_node_label))
+                    "(:{}) -[:{}]-> (:{})".format(src_node_label, label, tgt_node_label)
+                )
         return json.dumps(
             {
                 "Name of graph": self.graph_name,

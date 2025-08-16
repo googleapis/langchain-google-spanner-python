@@ -102,6 +102,7 @@ def random_generators():
         + [random_none, random_json]
     )
 
+
 properties = [
     ("p{}".format(i), random_val_gen)
     for i, random_val_gen in enumerate(random_generators())
@@ -448,68 +449,41 @@ class TestSpannerGraphStore:
         )
         # TOKENLIST-typed properties are ignored.
         assert schema["Node properties per node label"]["Node"] == [
-            {
-                "name": "id",
-                "type": "INT64"
-            },
-            {
-                "name": "node_b_id",
-                "type": "INT64"
-            },
-            {
-                "name": "str",
-                "type": "STRING"
-            },
-        ], 'Invalid Node properties'
+            {"name": "id", "type": "INT64"},
+            {"name": "node_b_id", "type": "INT64"},
+            {"name": "str", "type": "STRING"},
+        ], "Invalid Node properties"
         assert schema["Node properties per node label"]["NodeA"] == [
-            {
-                "name": "id",
-                "type": "INT64"
-            },
-            {
-                "name": "node_a_id",
-                "type": "INT64"
-            },
-            {
-                "name": "str",
-                "type": "STRING"
-            },
-        ], 'Invalid NodeA properties'
+            {"name": "id", "type": "INT64"},
+            {"name": "node_a_id", "type": "INT64"},
+            {"name": "str", "type": "STRING"},
+        ], "Invalid NodeA properties"
         assert schema["Node properties per node label"]["NodeB"] == [
-            {
-                "name": "id",
-                "type": "INT64"
-            },
-            {
-                "name": "node_b_id",
-                "type": "INT64"
-            },
-            {
-                "name": "str",
-                "type": "STRING"
-            },
-        ], 'Invalid NodeB properties'
+            {"name": "id", "type": "INT64"},
+            {"name": "node_b_id", "type": "INT64"},
+            {"name": "str", "type": "STRING"},
+        ], "Invalid NodeB properties"
         assert schema["Possible edges per label"]["EdgeAB"] == [
-            '(:Node) -[:EdgeAB]-> (:Node)',
-            '(:Node) -[:EdgeAB]-> (:NodeB)',
-            '(:NodeA) -[:EdgeAB]-> (:Node)',
-            '(:NodeA) -[:EdgeAB]-> (:NodeB)',
-        ], 'Invalid EdgeAB patterns'
+            "(:Node) -[:EdgeAB]-> (:Node)",
+            "(:Node) -[:EdgeAB]-> (:NodeB)",
+            "(:NodeA) -[:EdgeAB]-> (:Node)",
+            "(:NodeA) -[:EdgeAB]-> (:NodeB)",
+        ], "Invalid EdgeAB patterns"
         assert schema["Possible edges per label"]["EdgeBA"] == [
-            '(:Node) -[:EdgeBA]-> (:Node)',
-            '(:Node) -[:EdgeBA]-> (:NodeA)',
-            '(:NodeB) -[:EdgeBA]-> (:Node)',
-            '(:NodeB) -[:EdgeBA]-> (:NodeA)',
-        ], 'Invalid EdgeBA patterns'
+            "(:Node) -[:EdgeBA]-> (:Node)",
+            "(:Node) -[:EdgeBA]-> (:NodeA)",
+            "(:NodeB) -[:EdgeBA]-> (:Node)",
+            "(:NodeB) -[:EdgeBA]-> (:NodeA)",
+        ], "Invalid EdgeBA patterns"
         assert schema["Possible edges per label"]["Edge"] == [
-            '(:Node) -[:Edge]-> (:Node)',
-            '(:Node) -[:Edge]-> (:NodeA)',
-            '(:Node) -[:Edge]-> (:NodeB)',
-            '(:NodeA) -[:Edge]-> (:Node)',
-            '(:NodeA) -[:Edge]-> (:NodeB)',
-            '(:NodeB) -[:Edge]-> (:Node)',
-            '(:NodeB) -[:Edge]-> (:NodeA)',
-        ], 'Invalid Edge patterns'
+            "(:Node) -[:Edge]-> (:Node)",
+            "(:Node) -[:Edge]-> (:NodeA)",
+            "(:Node) -[:Edge]-> (:NodeB)",
+            "(:NodeA) -[:Edge]-> (:Node)",
+            "(:NodeA) -[:Edge]-> (:NodeB)",
+            "(:NodeB) -[:Edge]-> (:Node)",
+            "(:NodeB) -[:Edge]-> (:NodeA)",
+        ], "Invalid Edge patterns"
 
     @pytest.mark.parametrize("use_flexible_schema", [False, True])
     def test_spanner_graph_schema_representation(
@@ -528,10 +502,9 @@ class TestSpannerGraphStore:
             type="Node1{}".format(suffix),
             properties={"j1": random_string()},
         )
-        edge = Relationship(source=node0,
-                            target=node1,
-                            type="Links",
-                            properties={"j": random_json()})
+        edge = Relationship(
+            source=node0, target=node1, type="Links", properties={"j": random_json()}
+        )
 
         doc = GraphDocument(
             nodes=[node0, node1],
@@ -543,40 +516,41 @@ class TestSpannerGraphStore:
         )
         graph.add_graph_documents([doc])
         schema = json.loads(graph.get_schema)
-        node0_json_fields = sorted([
-            p['name']
-            for p in schema["Node properties per node label"][node0.type]
-        ])
-        node1_json_fields = sorted([
-            p['name']
-            for p in schema["Node properties per node label"][node1.type]
-        ])
-        edge_json_fields = sorted([
-            p['name']
-            for edge in schema["Edge properties per edge label"].values()
-            for p in edge
-        ])
-        edge_patterns = sorted([
-            pattern
-            for edge in schema["Possible edges per label"].values()
-            for pattern in edge
-        ])
-        if use_flexible_schema:
-            assert node0_json_fields == ['id', 'j0', 'label', 'properties']
-            assert node1_json_fields == ['id', 'j1', 'label', 'properties']
-            assert edge_json_fields == [
-                'id', 'j', 'label', 'properties', 'target_id'
+        node0_json_fields = sorted(
+            [p["name"] for p in schema["Node properties per node label"][node0.type]]
+        )
+        node1_json_fields = sorted(
+            [p["name"] for p in schema["Node properties per node label"][node1.type]]
+        )
+        edge_json_fields = sorted(
+            [
+                p["name"]
+                for edge in schema["Edge properties per edge label"].values()
+                for p in edge
             ]
+        )
+        edge_patterns = sorted(
+            [
+                pattern
+                for edge in schema["Possible edges per label"].values()
+                for pattern in edge
+            ]
+        )
+        if use_flexible_schema:
+            assert node0_json_fields == ["id", "j0", "label", "properties"]
+            assert node1_json_fields == ["id", "j1", "label", "properties"]
+            assert edge_json_fields == ["id", "j", "label", "properties", "target_id"]
             assert edge_patterns == [
-                '(:{src}) -[:{edge}]-> (:{dst})'.format(src=node0.type,
-                                                        edge=edge.type,
-                                                        dst=node1.type)
+                "(:{src}) -[:{edge}]-> (:{dst})".format(
+                    src=node0.type, edge=edge.type, dst=node1.type
+                )
             ]
         else:
-            assert node0_json_fields == ['id', 'j0']
-            assert node1_json_fields == ['id', 'j1']
-            assert edge_json_fields == ['id', 'j', 'target_id']
+            assert node0_json_fields == ["id", "j0"]
+            assert node1_json_fields == ["id", "j1"]
+            assert edge_json_fields == ["id", "j", "target_id"]
             assert edge_patterns == [
-                '(:{src}) -[:{src}_{edge}_{dst}]-> (:{dst})'.format(
-                    src=node0.type, edge=edge.type, dst=node1.type)
+                "(:{src}) -[:{src}_{edge}_{dst}]-> (:{dst})".format(
+                    src=node0.type, edge=edge.type, dst=node1.type
+                )
             ]
