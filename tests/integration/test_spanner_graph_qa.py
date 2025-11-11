@@ -37,7 +37,7 @@ def random_string(num_char=3):
 
 def get_llm():
     llm = ChatVertexAI(
-        model="gemini-1.5-flash-002",
+        model="gemini-2.0-flash-001",
         temperature=0,
     )
     return llm
