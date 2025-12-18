@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.9.0...v0.9.1) (2025-12-18)
+
+
+### Documentation
+
+* Fix jupyter notebook steps ([#196](https://github.com/googleapis/langchain-google-spanner-python/issues/196)) ([fffee5d](https://github.com/googleapis/langchain-google-spanner-python/commit/fffee5da8831f127b8870cf667f19007d99d52c3))
+
 ## [0.9.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.8.2...v0.9.0) (2025-07-23)
 
 
