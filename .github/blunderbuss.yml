@@ -1,4 +1,4 @@
 assign_issues:
-  - googleapis/langchain-spanner
+  - googleapis/langchain-spanner-team
 assign_prs:
-  - googleapis/langchain-spanner
+  - googleapis/langchain-spanner-team

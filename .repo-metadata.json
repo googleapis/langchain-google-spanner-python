@@ -9,5 +9,5 @@
     "repo": "googleapis/langchain-google-spanner-python",
     "distribution_name": "langchain-google-spanner",
     "requires_billing": true,
-    "codeowner_team": "@googleapis/senseai-eco"
+    "codeowner_team": "@googleapis/senseai-eco-team"
 }
