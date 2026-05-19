@@ -66,6 +66,7 @@ profile = "black"
 [tool.mypy]
 python_version = 3.9
 warn_unused_configs = true
+disallow_incomplete_defs = true
 
 exclude = [
     'docs/*',
