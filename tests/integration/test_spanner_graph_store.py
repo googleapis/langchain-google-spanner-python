@@ -22,10 +22,10 @@ import string
 import pytest
 from google.cloud.spanner import Client  # type: ignore
 from google.cloud.spanner_v1 import JsonObject
-from langchain_community.graphs.graph_document import GraphDocument, Node, Relationship
 from langchain_core.documents import Document
 
 from langchain_google_spanner import SpannerGraphStore
+from langchain_google_spanner.graphs import GraphDocument, Node, Relationship
 
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]

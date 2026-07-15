@@ -19,12 +19,12 @@ import string
 import pytest
 from google.cloud import spanner
 from langchain.evaluation import load_evaluator
-from langchain_community.graphs.graph_document import GraphDocument, Node, Relationship
 from langchain_core.documents import Document
 from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
 
 from langchain_google_spanner.graph_qa import SpannerGraphQAChain
 from langchain_google_spanner.graph_store import SpannerGraphStore
+from langchain_google_spanner.graphs import GraphDocument, Node, Relationship
 
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
@@ -37,7 +37,8 @@ def random_string(num_char=3):
 
 def get_llm():
     llm = ChatVertexAI(
-        model="gemini-2.0-flash-001",
+        model="gemini-3.5-flash",
+        location="global",
         temperature=0,
     )
     return llm

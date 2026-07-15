@@ -20,8 +20,8 @@ from typing import Dict
 
 import pytest
 from google.cloud.spanner import Client  # type: ignore
-from langchain_community.document_loaders import RecursiveUrlLoader
-from langchain_community.embeddings import FakeEmbeddings
+from langchain_core.documents import Document
+from langchain_core.embeddings.fake import FakeEmbeddings
 
 from langchain_google_spanner.vector_store import (  # type: ignore
     DistanceStrategy,
@@ -30,6 +30,15 @@ from langchain_google_spanner.vector_store import (  # type: ignore
     TableColumn,
     VectorSearchIndex,
 )
+
+
+class MockLoader:
+    def __init__(self, documents: list[Document]):
+        self.documents = documents
+
+    def load(self) -> list[Document]:
+        return self.documents
+
 
 project_id = os.environ["PROJECT_ID"]
 instance_id = os.environ["INSTANCE_ID"]
@@ -46,6 +55,21 @@ table_name_ANN = f"our_table_ann{uniq_py_suffix}"
 
 
 OPERATION_TIMEOUT_SECONDS = 240
+
+MOCK_DOCUMENTS = [
+    Document(
+        page_content="Testing the langchain integration with spanner",
+        metadata={"title": "Hacker News 1", "some_key": "some_val1"},
+    ),
+    Document(
+        page_content="Google Cloud Spanner is a globally distributed database",
+        metadata={"title": "Hacker News 2", "some_key": "some_val2"},
+    ),
+    Document(
+        page_content="Vector stores allow for semantic similarity search",
+        metadata={"title": "Hacker News 3", "some_key": "some_val3"},
+    ),
+]
 
 
 @pytest.fixture(scope="module")
@@ -249,9 +273,7 @@ class TestSpannerVectorStoreGoogleSQL_KNN:
             ],
         )
 
-        loader = RecursiveUrlLoader(
-            "https://news.ycombinator.com/item?id=1", max_depth=1
-        )
+        loader = MockLoader(MOCK_DOCUMENTS)
 
         embeddings = FakeEmbeddings(size=3)
 
@@ -461,9 +483,7 @@ class TestSpannerVectorStoreGoogleSQL_ANN:
                 ],
             )
 
-        loader = RecursiveUrlLoader(
-            "https://news.ycombinator.com/item?id=1", max_depth=1
-        )
+        loader = MockLoader(MOCK_DOCUMENTS)
         embeddings = FakeEmbeddings(size=title_vector_size)
 
         def cleanup_db():
@@ -681,9 +701,7 @@ class TestSpannerVectorStorePGSQL:
             ],
         )
 
-        loader = RecursiveUrlLoader(
-            "https://news.ycombinator.com/item?id=1", max_depth=1
-        )
+        loader = MockLoader(MOCK_DOCUMENTS)
         embeddings = FakeEmbeddings(size=3)
 
         yield loader, embeddings

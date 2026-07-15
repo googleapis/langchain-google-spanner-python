@@ -22,10 +22,9 @@ from typing import Any, Dict, Generator, Iterable, List, Mapping, Optional, Tupl
 
 from google.cloud import spanner
 from google.cloud.spanner_v1 import JsonObject, param_types
-from langchain_community.graphs.graph_document import GraphDocument, Node, Relationship
-from langchain_community.graphs.graph_store import GraphStore
 from requests.structures import CaseInsensitiveDict
 
+from .graphs import GraphDocument, GraphStore, Node, Relationship
 from .type_utils import TypeUtility
 from .version import __version__
 
@@ -1186,7 +1185,7 @@ class SpannerInterface(ABC):
     """Wrapper of Spanner APIs."""
 
     @abstractmethod
-    def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
+    def query(self, query: str, params: Optional[dict] = None) -> List[Dict[str, Any]]:
         """Runs a Spanner query.
 
         Args:
@@ -1244,7 +1243,8 @@ class SpannerImpl(SpannerInterface):
         self.database = self.instance.database(database_id)
         self.timeout = timeout
 
-    def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
+    def query(self, query: str, params: Optional[dict] = None) -> List[Dict[str, Any]]:
+        params = params or {}
         param_types = {k: TypeUtility.value_to_param_type(v) for k, v in params.items()}
         with self.database.snapshot() as snapshot:
             rows = snapshot.execute_sql(
@@ -1364,7 +1364,7 @@ class SpannerGraphStore(GraphStore):
                 print("Insert edges of type `{}`...".format(name))
                 self.impl.insert_or_update(table, columns, rows)
 
-    def query(self, query: str, params: dict = {}) -> List[Dict[str, Any]]:
+    def query(self, query: str, params: Optional[dict] = None) -> List[Dict[str, Any]]:
         """Query Spanner database.
 
         Args:

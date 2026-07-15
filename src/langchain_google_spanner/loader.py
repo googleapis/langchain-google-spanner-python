@@ -19,7 +19,7 @@ from typing import Any, Dict, Iterator, List, Optional, Union
 
 from google.cloud.spanner import Client, KeySet  # type: ignore
 from google.cloud.spanner_admin_database_v1.types import DatabaseDialect  # type: ignore
-from langchain_community.document_loaders.base import BaseLoader
+from langchain_core.document_loaders.base import BaseLoader
 from langchain_core.documents import Document
 
 from .version import __version__
