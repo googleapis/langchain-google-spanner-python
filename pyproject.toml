@@ -71,3 +71,8 @@ exclude = [
     'docs/*',
     'noxfile.py'
 ]
+
+[[tool.mypy.overrides]]
+module = "click.*"
+ignore_missing_imports = true
+follow_imports = "skip"
