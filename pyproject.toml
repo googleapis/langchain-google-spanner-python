@@ -4,7 +4,7 @@ dynamic = ["version"]
 description = "LangChain integrations for Google Cloud Spanner"
 readme = "README.rst"
 license = {file = "LICENSE"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "Google LLC", email = "googleapis-packages@google.com"}
 ]
@@ -21,10 +21,10 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
 [tool.setuptools.dynamic]
@@ -60,13 +60,13 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.black]
-target-version = ['py39']
+target-version = ['py310']
 
 [tool.isort]
 profile = "black"
 
 [tool.mypy]
-python_version = 3.9
+python_version = "3.10"
 warn_unused_configs = true
 follow_imports = "skip"
 

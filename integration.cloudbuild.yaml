@@ -38,7 +38,7 @@ substitutions:
   _INSTANCE_ID: test-instance
   _GOOGLE_DATABASE: test-gsql-db
   _PG_DATABASE: test-pgsql-db
-  _VERSION: "3.9"
+  _VERSION: "3.10"
 
 options:
   dynamicSubstitutions: true
