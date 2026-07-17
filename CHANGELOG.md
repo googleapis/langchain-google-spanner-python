@@ -2,6 +2,12 @@
 
 ## [0.9.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.9.0...v0.9.1) (2026-07-17)
 
+**Note that this is the latest release which removes langchain-community dependency but still not updating langchain packages to v1, so still Python 3.9 compatible.**
+
+### Bug Fixes
+* **gcloud**: Migrate gsutil usage to gcloud storage by @gurusai-voleti in https://github.com/googleapis/langchain-google-spanner-python/pull/214
+* **ci**: delete inactive kokoro release folder by @suztomo in https://github.com/googleapis/langchain-google-spanner-python/pull/229
+* **refactor**: remove dependency on langchain-community and update to gemini-3.5-flash by @lcjin-del in https://github.com/googleapis/langchain-google-spanner-python/pull/238
 
 ### Documentation
 
