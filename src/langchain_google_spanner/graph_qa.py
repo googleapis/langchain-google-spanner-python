@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from langchain.chains.base import Chain
+from langchain_classic.chains.base import Chain
 from langchain_core.callbacks import CallbackManagerForChainRun
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser

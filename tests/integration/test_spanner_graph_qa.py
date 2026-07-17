@@ -18,7 +18,7 @@ import string
 
 import pytest
 from google.cloud import spanner
-from langchain.evaluation import load_evaluator
+from langchain_classic.evaluation import load_evaluator
 from langchain_core.documents import Document
 from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
 
