@@ -15,7 +15,6 @@
 import json
 from typing import Any, List, Optional
 
-from langchain.schema.retriever import BaseRetriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -25,6 +24,7 @@ from langchain_core.load import dumps
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import FewShotPromptTemplate
 from langchain_core.prompts.prompt import PromptTemplate
+from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import RunnableSequence
 from langchain_core.vectorstores import InMemoryVectorStore
 from pydantic import Field

@@ -65,16 +65,16 @@ ENV BINARY yq_linux_amd64
 RUN wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY} -O /usr/bin/yq && \
     chmod +x /usr/bin/yq
 
-###################### Install python 3.9.13
+###################### Install python 3.10.19
 
-# Download python 3.9.13
-RUN wget https://www.python.org/ftp/python/3.9.13/Python-3.9.13.tgz
+# Download python 3.10.19
+RUN wget https://www.python.org/ftp/python/3.10.19/Python-3.10.19.tgz
 
 # Extract files
-RUN tar -xvf Python-3.9.13.tgz
+RUN tar -xvf Python-3.10.19.tgz
 
-# Install python 3.9.13
-RUN ./Python-3.9.13/configure --enable-optimizations
+# Install python 3.10.19
+RUN ./Python-3.10.19/configure --enable-optimizations
 RUN make altinstall
 
 ###################### Install pip
