@@ -5,7 +5,7 @@
 
 ### Bug Fixes
 
-* Run lint check on python 3.11 ([d69f250](https://github.com/googleapis/langchain-google-spanner-python/commit/d69f250156c778bb3ec7112ff26316239a4681e7))
+* Upgrade Langchain related library to v1 and above. Deprecate Python 3.9 and add Python 3.13 support. (https://github.com/googleapis/langchain-google-spanner-python/pull/248)
 
 ## [0.9.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.9.0...v0.9.1) (2026-07-17)
 
