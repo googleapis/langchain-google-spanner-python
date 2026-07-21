@@ -42,4 +42,4 @@ permissionRules:
   - team: senseai-eco
     permission: admin
   - team: langchain-spanner 
-    permission: push
+    permission: admin
