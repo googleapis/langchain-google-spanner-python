@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.9.1...v0.10.0) (2026-07-21)
+
+
+### Bug Fixes
+
+* Run lint check on python 3.11 ([d69f250](https://github.com/googleapis/langchain-google-spanner-python/commit/d69f250156c778bb3ec7112ff26316239a4681e7))
+
 ## [0.9.1](https://github.com/googleapis/langchain-google-spanner-python/compare/v0.9.0...v0.9.1) (2026-07-17)
 
 **Note that this is the latest release which removes langchain-community dependency but still not updating langchain packages to v1, so still Python 3.9 compatible.**
