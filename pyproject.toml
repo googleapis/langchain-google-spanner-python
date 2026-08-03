@@ -45,7 +45,7 @@ lint = [
 ]
 
 test = [
-    "black[jupyter]==24.10.0",
+    "black[jupyter]==26.5.1",
     "bs4==0.0.2",
     "flake8==6.1.0",
     "isort==5.13.2",
